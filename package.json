@@ -14,7 +14,7 @@
     "README.md"
   ],
   "scripts": {
-    "test": "node --import ./test/loader.mjs --test test/probability.test.es test/cost.test.es test/aggregate.test.es test/curve.test.es test/kcwiki.test.es test/wmfg.test.es test/reducer.test.es test/schema.test.es test/p-state.test.es test/i18n.test.es"
+    "test": "node --import ./test/loader.mjs --test test/probability.test.es test/cost.test.es test/aggregate.test.es test/curve.test.es test/format.test.es test/kcwiki.test.es test/wmfg.test.es test/reducer.test.es test/schema.test.es test/p-state.test.es test/i18n.test.es"
   },
   "keywords": [
     "kancolle",
