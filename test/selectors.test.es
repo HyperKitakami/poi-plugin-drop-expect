@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  filterOptions,
   findHiddenShipMatch,
   getShipOptions,
   resolveBaseShipId,
@@ -80,4 +81,22 @@ test('查不到时给出具体原因：只有真正被过滤的才提示', () =>
   const enemy = findHiddenShipMatch(MASTER, '駆逐イ級')
   assert.equal(enemy.shipId, 501)
   assert.equal(enemy.baseId, 501, '敌舰没有前驱，baseId 等于自身 → UI 不显示「改为加入」')
+})
+
+test('候选筛选：空查询不给候选（海域 200 多个，空值铺开会糊一屏）', () => {
+  assert.deepEqual(filterOptions(['1-1', '2-2'], ''), [])
+  assert.deepEqual(filterOptions(['1-1', '2-2'], '   '), [])
+  assert.deepEqual(filterOptions(['1-1', '2-2'], null), [])
+  assert.deepEqual(filterOptions(null, '2'), [])
+})
+
+test('候选筛选：前缀命中排在包含命中之前', () => {
+  const options = ['12-1', '2-2', '2-3', '1-2', '62-1']
+  assert.deepEqual(filterOptions(options, '2'), ['2-2', '2-3', '12-1', '1-2', '62-1'])
+})
+
+test('候选筛选：大小写不敏感且可截断', () => {
+  assert.deepEqual(filterOptions(['a', 'B', 'ab'], 'A'), ['a', 'ab'])
+  assert.equal(filterOptions(Array.from({ length: 50 }, (_, i) => `2-${i}`), '2', 5).length, 5)
+  assert.deepEqual(filterOptions(['2-2', '3-3'], '9'), [])
 })

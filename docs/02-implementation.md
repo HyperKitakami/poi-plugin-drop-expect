@@ -302,6 +302,7 @@ poi-plugin-drop-expect/
 │   ├── point_editor.es   点位卡片（表头折叠/标题/备注/删除，可折叠主体）
 │   ├── target_list.es    目标舰搜索/添加
 │   ├── number_input.es   带草稿的数字输入
+│   ├── suggest_input.es  输入后才出候选的下拉（海域等长列表，替代 datalist）
 │   ├── error_boundary.es 渲染兜底
 │   ├── selectors.es      store 取值 + 派生
 │   └── settings.es       目标概率/口径/默认值（并入结果页控制条）

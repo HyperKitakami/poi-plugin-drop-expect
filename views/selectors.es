@@ -222,3 +222,28 @@ export const findHiddenShipMatch = (masterShips, query) => {
     baseName: baseId ? resolveShipName(masterShips, baseId) : null,
   }
 }
+
+/*
+  候选项筛选：空查询返回空数组。
+
+  这条「空 → 空」是刻意的：海域有 200 多个值，空值时铺开会糊满一屏，
+  所以输入框聚焦但没输入时不该给候选（见 suggest_input.es 的说明）。
+  前缀命中的排在包含命中之前，「2」先给 2-x 而不是 12-x。
+*/
+export const filterOptions = (options, query, limit = 12) => {
+  const q = String(query == null ? '' : query).trim().toUpperCase()
+  if (q === '' || !Array.isArray(options)) {
+    return EMPTY_ARR
+  }
+  const prefixed = []
+  const contained = []
+  for (const option of options) {
+    const text = String(option).toUpperCase()
+    if (text.startsWith(q)) {
+      prefixed.push(option)
+    } else if (text.includes(q)) {
+      contained.push(option)
+    }
+  }
+  return [...prefixed, ...contained].slice(0, Math.max(1, limit))
+}

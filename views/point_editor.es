@@ -3,6 +3,7 @@ import { Button, Callout, Card, Divider, HTMLSelect, InputGroup, Tag } from '@bl
 
 import { findHiddenShipMatch, getMapOptions, getShipOptions, getSpotOptions, isEventArea, resolveShipName, shipMatchesQuery } from './selectors'
 import { NumberInput } from './number_input'
+import { SuggestInput } from './suggest_input'
 import { ACCENT_COLOR } from './theme'
 import { t } from './i18n'
 
@@ -210,9 +211,7 @@ const PointCard = ({
   const spotOptions = useMemo(() => getSpotOptions(fcdMap, point.mapId), [fcdMap, point.mapId])
   const shipOptions = useMemo(() => getShipOptions(masterShips), [masterShips])
 
-  const mapListId = `de-maps-${point.id}`
   const spotListId = `de-spots-${point.id}`
-  const estListId = `de-est-maps-${point.id}`
 
   // 已加入本点位的舰船（rate 为 null 表示占位、还没填率）
   const members = useMemo(() => {
@@ -407,24 +406,21 @@ const PointCard = ({
           {/* 位置 */}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
             <Field label={t('Map', '海域')} hint={t('Type or pick', '可选择或直接输入')}>
-              <InputGroup
+              {/* 输入后才给候选：海域有 200 多个，空值铺开就是一大片 */}
+              <SuggestInput
                 value={point.mapId || ''}
-                list={mapListId}
+                options={mapOptions}
                 placeholder="2-2"
-                style={{ width: 110 }}
-                onChange={e =>
+                width={110}
+                ariaLabel={t('Map', '海域')}
+                onChange={next =>
                   onChange({
-                    mapId: e.target.value === '' ? null : e.target.value,
+                    mapId: next === '' ? null : next,
                     // 换海域后旧的目标点一定不再成立
                     cell: null,
                   })
                 }
               />
-              <datalist id={mapListId}>
-                {mapOptions.map(id => (
-                  <option key={id} value={id} />
-                ))}
-              </datalist>
             </Field>
 
             <Field label={t('Target node', '目标点')} hint={t('Cell letter', '如 B / K')}>
@@ -692,18 +688,14 @@ const PointCard = ({
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 4, flexWrap: 'wrap' }}>
             <Field label={t('Map for stats', '统计海域')}>
-              <InputGroup
+              <SuggestInput
                 value={estMapId}
-                list={estListId}
+                options={mapOptions}
                 placeholder="2-2"
-                style={{ width: 110 }}
-                onChange={e => setEstMapId(e.target.value)}
+                width={110}
+                ariaLabel={t('Map for stats', '统计海域')}
+                onChange={setEstMapId}
               />
-              <datalist id={estListId}>
-                {mapOptions.map(id => (
-                  <option key={id} value={id} />
-                ))}
-              </datalist>
             </Field>
             <Field label={t('Range', '时间段')}>
               <HTMLSelect value={estRange} onChange={e => setEstRange(e.target.value)}>
