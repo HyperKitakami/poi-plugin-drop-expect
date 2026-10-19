@@ -100,8 +100,5 @@
   "Add selected": "加入选中",
   "Added points": "已加入",
   "Fetch failed": "抓取失败",
-  "Window": "统计窗口",
-  "Lowest cost": "本舰各点位中最低",
-  "Highest cost": "本舰各点位中最高",
-  "Cost extremes hint": "资源按项比较各点位：绿色为该舰最低，红色为最高"
+  "Window": "统计窗口"
 }
