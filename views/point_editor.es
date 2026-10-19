@@ -63,27 +63,23 @@ const LEVELS = [
 
 // 补给 = 出击当下扣的；入渠 = 修船折算的，桶算在入渠行
 const COST_ROWS = [
-  {
-    id: 'supply',
-    title: '补给',
-    hint: '出击时直接扣除',
-    keys: [
-      ['supplyFuel', '油'],
-      ['ammo', '弹'],
-      ['supplySteel', '钢'],
-      ['bauxite', '铝'],
-    ],
-  },
-  {
-    id: 'dock',
-    title: '入渠',
-    hint: '按入渠价折算',
-    keys: [
-      ['dockFuel', '油'],
-      ['dockSteel', '钢'],
-      ['bucket', '桶'],
-    ],
-  },
+  { id: 'supply', title: '补给', hint: '出击时直接扣除' },
+  { id: 'dock', title: '入渠', hint: '按入渠价折算' },
+]
+
+/*
+  消耗表按「资源 × 行」排布：列是资源（一行一个输入框，标签在表头），
+  行是补给/入渠，不适用的一格留「—」。
+
+  之前是两排「油 弹 钢 铝」+「油 钢 桶」各自成组，两行都重复用 油/钢，
+  哪一格对应哪项全靠那个 12px 的小字，很容易看串。
+*/
+const COST_COLUMNS = [
+  { id: 'fuel', text: '油', supply: 'supplyFuel', dock: 'dockFuel' },
+  { id: 'ammo', text: '弹', supply: 'ammo', dock: null },
+  { id: 'steel', text: '钢', supply: 'supplySteel', dock: 'dockSteel' },
+  { id: 'bauxite', text: '铝', supply: 'bauxite', dock: null },
+  { id: 'bucket', text: '桶', supply: null, dock: 'bucket' },
 ]
 
 const RANGES = [
@@ -754,30 +750,60 @@ const PointCard = ({
 
           {/* 单次消耗 */}
           <Divider style={{ margin: '10px 0' }} />
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            {COST_ROWS.map(row => (
-              <Field
-                key={row.id}
-                label={t(row.id === 'supply' ? 'Supply' : 'Repair', row.title)}
-                hint={row.hint}
-              >
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {row.keys.map(([key, label]) => (
-                    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 3, width: 76 }}>
-                      <span className="bp6-text-muted" style={{ fontSize: 11, width: 12 }}>
-                        {label}
-                      </span>
-                      <NumberInput
-                        value={typeof cost[key] === 'number' ? cost[key] : null}
-                        min={0}
-                        onChange={value => onChange({ cost: { ...cost, [key]: value == null ? 0 : value } })}
-                        ariaLabel={key}
-                      />
-                    </div>
+          <b style={{ fontSize: 12 }}>{t('Cost per sortie', '单次消耗')}</b>
+          <div style={{ marginTop: 4, overflowX: 'auto' }}>
+            <table className="bp6-html-table bp6-html-table-condensed" style={{ width: 'auto' }}>
+              <thead>
+                <tr>
+                  <th style={{ minWidth: 96 }} />
+                  {COST_COLUMNS.map(col => (
+                    <th key={col.id} style={{ textAlign: 'center', paddingRight: 8 }}>
+                      {t(col.id, col.text)}
+                    </th>
                   ))}
-                </div>
-              </Field>
-            ))}
+                </tr>
+              </thead>
+              <tbody>
+                {COST_ROWS.map(row => {
+                  const rowLabel = t(row.id === 'supply' ? 'Supply' : 'Repair', row.title)
+                  return (
+                    <tr key={row.id}>
+                      <td style={{ whiteSpace: 'nowrap', paddingRight: 12 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600 }}>{rowLabel}</div>
+                        <div className="bp6-text-muted" style={{ fontSize: 11, lineHeight: '14px' }}>
+                          {row.hint}
+                        </div>
+                      </td>
+                      {COST_COLUMNS.map(col => {
+                        const key = col[row.id]
+                        if (!key) {
+                          return (
+                            <td
+                              key={col.id}
+                              className="bp6-text-muted"
+                              style={{ textAlign: 'center', fontSize: 11 }}
+                            >
+                              —
+                            </td>
+                          )
+                        }
+                        return (
+                          <td key={col.id} style={{ paddingRight: 8 }}>
+                            <NumberInput
+                              value={typeof cost[key] === 'number' ? cost[key] : null}
+                              min={0}
+                              width={68}
+                              onChange={value => onChange({ cost: { ...cost, [key]: value == null ? 0 : value } })}
+                              ariaLabel={`${rowLabel}-${t(col.id, col.text)}`}
+                            />
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
 
           {/* 消耗估算 */}

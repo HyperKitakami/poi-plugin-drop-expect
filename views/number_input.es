@@ -9,6 +9,12 @@ import { InputGroup } from '@blueprintjs/core'
   这样既不会覆盖正在输入的内容，也能响应外部重置。
 
   空字符串向上汇报 null（= 未设置），而不是 0。
+
+  宽度必须给外层 div：bp6 的 InputGroup 把 style 透传给内部 <input>，
+  而 .bp6-input-group 本身只是 display:block 的壳（块级、宽度跟着内容走）。
+  若直接把 width 打在 input 上，壳会按 140px 撑开再被 flex 压缩，
+  input 就从格子里溢出来——后面的兄弟节点盖住它，聚焦时它又浮到上层，
+  视觉上就成了「一个框套住两个输入框」。所以这里固定外壳、让 input 取 100%。
 */
 
 const toText = value => (typeof value === 'number' && Number.isFinite(value) ? String(value) : '')
@@ -21,7 +27,7 @@ const parse = text => {
   return Number.isFinite(n) ? n : null
 }
 
-const NumberInput = ({ value, onChange, placeholder, step = 'any', min, max, disabled, ariaLabel, width = 140 }) => {
+const NumberInput = ({ value, onChange, placeholder, min, max, disabled, ariaLabel, width = 140 }) => {
   const [draft, setDraft] = useState(toText(value))
   const external = typeof value === 'number' && Number.isFinite(value) ? value : null
 
@@ -52,15 +58,17 @@ const NumberInput = ({ value, onChange, placeholder, step = 'any', min, max, dis
   }
 
   return (
-    <InputGroup
-      value={draft}
-      onChange={handleChange}
-      placeholder={placeholder}
-      disabled={disabled}
-      inputMode="decimal"
-      aria-label={ariaLabel}
-      style={{ width, maxWidth: width }}
-    />
+    <div style={{ width, flexShrink: 0 }}>
+      <InputGroup
+        value={draft}
+        onChange={handleChange}
+        placeholder={placeholder}
+        disabled={disabled}
+        inputMode="decimal"
+        aria-label={ariaLabel}
+        style={{ width: '100%' }}
+      />
+    </div>
   )
 }
 
