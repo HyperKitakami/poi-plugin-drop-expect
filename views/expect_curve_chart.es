@@ -6,7 +6,10 @@ import React, { useMemo } from 'react'
   尺寸按「看得清」定：viewBox 560×300，配合 width:100% / height:auto，
   在侧栏里会按容器宽度等比放大，而不是固定 360×176 那种缩略图。
 
-  竖虚线标三个位置：50%、90%，以及当前设定的期望（设定值与前者重合时只画一条）。
+  竖虚线画三条：50%、90%、当前期望（设定值与前两者重合时只画一条）。
+  标签**只标在横轴刻度上**，不跟在虚线旁边——
+  跟在旁边时，自定义值（比如 93%）的标签会和 90% 的标签挤在一起。
+  自定义值本身在页面顶部的标签里已经有了，图上不必重复。
 
   颜色：这是整个项目唯一硬编码的颜色。多序列必须有可区分的色相，
   而 Blueprint 没有导出可编程的配色 API；这里用的是它调色板里的中调色
@@ -17,10 +20,8 @@ const PALETTE = ['#4C90F0', '#D9822B', '#29A634', '#9D6EE0', '#C23030', '#00A396
 
 const WIDTH = 560
 const HEIGHT = 300
-const PAD = { left: 60, right: 16, top: 16, bottom: 32 }
+const PAD = { left: 60, right: 16, top: 16, bottom: 34 }
 const BASE_GUIDES = [0.5, 0.9]
-// 设定值与固定参考线离得太近时不再重复画
-const SAME_GUIDE = 0.004
 
 const ExpectCurveChart = ({ series, format, probTarget = 0.9 }) => {
   const geometry = useMemo(() => {
@@ -56,16 +57,30 @@ const ExpectCurveChart = ({ series, format, probTarget = 0.9 }) => {
         .join(''),
     )
 
-    const guides = BASE_GUIDES.filter(t => Math.abs(t - probTarget) > SAME_GUIDE).map(t => ({
-      t,
-      label: `${Math.round(t * 100)}%`,
-      strong: false,
-    }))
-    if (probTarget > 0 && probTarget < 1) {
-      guides.push({ t: probTarget, label: `期望 ${Math.round(probTarget * 100)}%`, strong: true })
+    // 虚线：50%、90% 是参考，当前期望加粗；同一位置只留一条（加粗优先）
+    const guideMap = new Map()
+    for (const guide of [...BASE_GUIDES.map(t => ({ t, strong: false })), { t: probTarget, strong: true }]) {
+      if (!(guide.t > tMin && guide.t < tMax)) {
+        continue
+      }
+      const key = guide.t.toFixed(4)
+      const previous = guideMap.get(key)
+      if (!previous || guide.strong) {
+        guideMap.set(key, { t: guide.t, strong: !!guide.strong })
+      }
     }
 
-    return { tMin, tMax, yMax, toX, toY, paths, guides, plotW, plotH }
+    // 横轴刻度：两端 + 50% / 90%。标签放这里，远离虚线
+    const tickMap = new Map()
+    for (const t of [tMin, ...BASE_GUIDES, tMax]) {
+      if (t < tMin - 1e-9 || t > tMax + 1e-9) {
+        continue
+      }
+      tickMap.set(t.toFixed(4), t)
+    }
+    const ticks = [...tickMap.values()].sort((a, b) => a - b)
+
+    return { tMin, tMax, yMax, toX, toY, paths, guides: [...guideMap.values()], ticks }
   }, [series, probTarget])
 
   if (!geometry) {
@@ -113,7 +128,14 @@ const ExpectCurveChart = ({ series, format, probTarget = 0.9 }) => {
                 strokeOpacity={ratio === 0 ? 0.35 : 0.12}
                 strokeDasharray={ratio === 0 ? '' : '3 3'}
               />
-              <text x={PAD.left - 6} y={y + 4} textAnchor="end" fontSize="10" fill="currentColor" fillOpacity="0.55">
+              <text
+                x={PAD.left - 6}
+                y={y + 4}
+                textAnchor="end"
+                fontSize="10"
+                fill="currentColor"
+                fillOpacity="0.55"
+              >
                 {format(value)}
               </text>
             </g>
@@ -122,32 +144,17 @@ const ExpectCurveChart = ({ series, format, probTarget = 0.9 }) => {
 
         {geometry.guides.map(guide => {
           const x = geometry.toX(guide.t)
-          if (x < PAD.left || x > WIDTH - PAD.right) {
-            return null
-          }
-          const anchor = x > WIDTH - 80 ? 'end' : 'start'
           return (
-            <g key={guide.label}>
-              <line
-                x1={x}
-                x2={x}
-                y1={PAD.top}
-                y2={axisY}
-                stroke="currentColor"
-                strokeOpacity={guide.strong ? 0.45 : 0.2}
-                strokeDasharray={guide.strong ? '5 4' : '3 4'}
-              />
-              <text
-                x={anchor === 'end' ? x - 4 : x + 4}
-                y={axisY - 6}
-                textAnchor={anchor}
-                fontSize="9"
-                fill="currentColor"
-                fillOpacity={guide.strong ? 0.75 : 0.5}
-              >
-                {guide.label}
-              </text>
-            </g>
+            <line
+              key={guide.t}
+              x1={x}
+              x2={x}
+              y1={PAD.top}
+              y2={axisY}
+              stroke="currentColor"
+              strokeOpacity={guide.strong ? 0.45 : 0.18}
+              strokeDasharray={guide.strong ? '5 4' : '3 4'}
+            />
           )
         })}
 
@@ -162,19 +169,25 @@ const ExpectCurveChart = ({ series, format, probTarget = 0.9 }) => {
           />
         ))}
 
-        <text x={PAD.left} y={axisY + 16} fontSize="10" fill="currentColor" fillOpacity="0.55">
-          {Math.round(geometry.tMin * 100)}%
-        </text>
-        <text
-          x={WIDTH - PAD.right}
-          y={axisY + 16}
-          textAnchor="end"
-          fontSize="10"
-          fill="currentColor"
-          fillOpacity="0.55"
-        >
-          {Math.round(geometry.tMax * 100)}%
-        </text>
+        {geometry.ticks.map(t => {
+          const x = geometry.toX(t)
+          const anchor = Math.abs(t - geometry.tMin) < 1e-9 ? 'start' : Math.abs(t - geometry.tMax) < 1e-9 ? 'end' : 'middle'
+          return (
+            <g key={t}>
+              <line x1={x} x2={x} y1={axisY} y2={axisY + 4} stroke="currentColor" strokeOpacity="0.35" />
+              <text
+                x={x}
+                y={axisY + 16}
+                textAnchor={anchor}
+                fontSize="10"
+                fill="currentColor"
+                fillOpacity="0.55"
+              >
+                {Math.round(t * 100)}%
+              </text>
+            </g>
+          )
+        })}
       </svg>
     </div>
   )
