@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Button, Callout, Card, Divider, HTMLSelect, Tag } from '@blueprintjs/core'
 
@@ -29,6 +29,7 @@ import {
   targetsSelector,
   uiSelector,
 } from './selectors'
+import { CurvePanel } from './curve_panel'
 import { NumberInput } from './number_input'
 import { PointEditor } from './point_editor'
 import { ResultTable } from './result_table'
@@ -57,6 +58,16 @@ const SORT_OPTIONS = [
   { value: 'fuel', label: '按总油' },
   { value: 'rate', label: '按掉落率' },
 ]
+
+const TABS = [
+  { id: 'result', label: '计算结果' },
+  { id: 'curve', label: '期望曲线' },
+  { id: 'config', label: '点位与目标舰' },
+]
+
+const Panel = ({ active, children }) => (
+  <div style={{ display: active ? 'block' : 'none' }}>{children}</div>
+)
 
 const Labeled = ({ label, children }) => (
   <div style={{ minWidth: 110 }}>
@@ -87,10 +98,11 @@ const PanelContent = () => {
   const ui = useSelector(uiSelector)
   const admiralId = useSelector(admiralIdSelector)
 
-  const mode = MODE_OPTIONS.some(o => o.value === ui.mode) ? ui.mode : 'single'
-  const probTarget = typeof ui.probTarget === 'number' && ui.probTarget > 0 && ui.probTarget < 1
-    ? ui.probTarget
-    : 0.9
+  const [tab, setTab] = useState('result')
+
+  const mode = MODE_OPTIONS.some(option => option.value === ui.mode) ? ui.mode : 'single'
+  const probTarget =
+    typeof ui.probTarget === 'number' && ui.probTarget > 0 && ui.probTarget < 1 ? ui.probTarget : 0.9
 
   /*
     报告是纯推导，只在输入变化时重算。
@@ -189,188 +201,208 @@ const PanelContent = () => {
 
   return (
     <div style={{ padding: 8, height: '100%', overflowY: 'auto' }}>
-      <Callout intent="primary" title={t('Drop Expect', '掉落期望')}>
-        {t('Configured', '已配置')} {points.length} {t('points', '个点位')} · {targets.length}{' '}
-        {t('targets', '艘目标舰')}
-      </Callout>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <b>{t('Drop Expect', '掉落期望')}</b>
+        <span className="bp6-text-muted" style={{ fontSize: 11 }}>
+          {points.length} {t('points', '个点位')} · {targets.length} {t('targets', '艘目标舰')}
+        </span>
+      </div>
 
-      <Card style={{ marginTop: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <b>{t('Result', '计算结果')}</b>
-          <span className="bp6-text-muted" style={{ fontSize: 11 }}>
-            {MODE_OPTIONS.find(o => o.value === mode).label} ·{' '}
-            {t('confidence', '把握')} {(probTarget * 100).toFixed(probTarget * 100 % 1 === 0 ? 0 : 1)}%
-          </span>
-        </div>
-        <Divider style={{ margin: '8px 0' }} />
+      <div style={{ display: 'flex', gap: 2, marginTop: 6 }}>
+        {TABS.map(item => (
+          <Button
+            key={item.id}
+            minimal
+            small
+            active={tab === item.id}
+            onClick={() => setTab(item.id)}
+            text={item.label}
+          />
+        ))}
+      </div>
+      <Divider style={{ margin: '2px 0 8px' }} />
 
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          <Labeled label={t('Target confidence', '目标把握')}>
-            <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              <NumberInput
-                value={Number((probTarget * 100).toFixed(2))}
-                min={1}
-                max={99.9}
-                onChange={value => dispatch(setUi({ probTarget: value == null ? 0.9 : value / 100 }))}
-                ariaLabel="target confidence"
-              />
-              {PROB_PRESETS.map(preset => (
+      <Panel active={tab === 'result'}>
+        <Card>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <Labeled label={t('Target confidence', '目标把握')}>
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <NumberInput
+                  value={Number((probTarget * 100).toFixed(2))}
+                  min={1}
+                  max={99.9}
+                  onChange={value =>
+                    dispatch(setUi({ probTarget: value == null ? 0.9 : value / 100 }))
+                  }
+                  ariaLabel="target confidence"
+                />
+                {PROB_PRESETS.map(preset => (
+                  <Button
+                    key={preset}
+                    small
+                    minimal
+                    active={Math.abs(probTarget - preset) < 1e-6}
+                    onClick={() => dispatch(setUi({ probTarget: preset }))}
+                  >
+                    {preset * 100}
+                  </Button>
+                ))}
+              </div>
+            </Labeled>
+
+            <Labeled label={t('Mode', '口径')}>
+              <HTMLSelect value={mode} onChange={e => dispatch(setUi({ mode: e.target.value }))}>
+                {MODE_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </HTMLSelect>
+            </Labeled>
+
+            <Labeled label={t('Sort', '排序')}>
+              <HTMLSelect
+                value={ui.sortKey || 'n'}
+                onChange={e => dispatch(setUi({ sortKey: e.target.value }))}
+              >
+                {SORT_OPTIONS.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </HTMLSelect>
+            </Labeled>
+          </div>
+        </Card>
+
+        <ResultTable report={report} masterShips={masterShips} />
+
+        <Card style={{ marginTop: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <b>{t('Current resources', '现有资源')}</b>
+            <span>
+              <Tag minimal intent={storedHave.manual ? 'warning' : 'success'}>
+                {storedHave.manual ? t('manual', '手动') : t('from poi', '来自 poi')}
+              </Tag>
+              {storedHave.manual && poiResources ? (
                 <Button
-                  key={preset}
                   small
                   minimal
-                  active={Math.abs(probTarget - preset) < 1e-6}
-                  onClick={() => dispatch(setUi({ probTarget: preset }))}
+                  style={{ marginLeft: 4 }}
+                  onClick={() => dispatch(setHave(poiResources, false))}
                 >
-                  {preset * 100}
+                  {t('Resync', '重新同步')}
                 </Button>
-              ))}
-            </div>
-          </Labeled>
-
-          <Labeled label={t('Mode', '口径')}>
-            <HTMLSelect value={mode} onChange={e => dispatch(setUi({ mode: e.target.value }))}>
-              {MODE_OPTIONS.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </HTMLSelect>
-          </Labeled>
-
-          <Labeled label={t('Sort', '排序')}>
-            <HTMLSelect
-              value={ui.sortKey || 'n'}
-              onChange={e => dispatch(setUi({ sortKey: e.target.value }))}
-            >
-              {SORT_OPTIONS.map(option => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </HTMLSelect>
-          </Labeled>
-        </div>
-
-        <ResultTable report={report} masterShips={masterShips} probTarget={probTarget} />
-      </Card>
-
-      <Card style={{ marginTop: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <b>{t('Target ships', '目标舰')}</b>
-          <span className="bp6-text-muted" style={{ fontSize: 11 }}>
-            {t('Shared across points', '全局清单，各点位分别填写掉落率')}
-          </span>
-        </div>
-        <Divider style={{ margin: '8px 0' }} />
-        <TargetList
-          targets={targets}
-          masterShips={masterShips}
-          onAdd={shipId => dispatch(addTarget(shipId))}
-          onRemove={shipId => dispatch(removeTarget(shipId))}
-        />
-      </Card>
-
-      <Card style={{ marginTop: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <b>{t('Points', '点位')}</b>
-          <Button small intent="primary" icon="add" onClick={() => dispatch(addPoint())}>
-            {t('Add point', '添加点位')}
-          </Button>
-        </div>
-
-        {points.length === 0 ? (
-          <div style={{ marginTop: 8 }}>
-            <Callout intent="none">
-              {t('No point yet', '还没有点位。点「添加点位」，选择海域与格子即可。')}
-            </Callout>
+              ) : null}
+            </span>
           </div>
-        ) : (
-          points.map((point, index) => (
-            <div key={point.id} style={{ marginTop: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <b>{pointTitle(point)}</b>
-                {rateCount(point) > 0 ? (
-                  <Tag minimal>{`${rateCount(point)} ${t('rates', '项掉落率')}`}</Tag>
-                ) : (
-                  <Tag minimal intent="warning">
-                    {t('rate missing', '未填掉落率')}
-                  </Tag>
-                )}
-              </div>
-              <PointEditor
-                point={point}
-                targets={targets}
-                masterShips={masterShips}
-                mapareas={mapareas}
-                fcdMap={fcdMap}
-                onChange={patch => dispatch(updatePoint(point.id, patch))}
-                onRate={(shipId, rate) =>
-                  rate == null
-                    ? dispatch(clearRate(point.id, shipId))
-                    : dispatch(setRate(point.id, shipId, rate))
-                }
-                onFetch={handleFetchRates}
-                estimateCost={handleEstimateCost}
-                onRemove={() => {
-                  if (window.confirm(t('Delete this point?', '删除这个点位？'))) {
-                    dispatch(removePoint(point.id))
+          <Divider style={{ margin: '8px 0' }} />
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {HAVE_FIELDS.map(field => (
+              <div key={field.key} style={{ minWidth: 100 }}>
+                <div className="bp6-text-muted" style={{ fontSize: 11, marginBottom: 2 }}>
+                  {field.label}
+                </div>
+                <NumberInput
+                  value={typeof have[field.key] === 'number' ? have[field.key] : null}
+                  min={0}
+                  onChange={value =>
+                    dispatch(setHave({ ...storedHave, [field.key]: value == null ? 0 : value }, true))
                   }
-                }}
-              />
-              {index < points.length - 1 ? <Divider style={{ margin: '12px 0 0' }} /> : null}
-            </div>
-          ))
-        )}
-      </Card>
-
-      <Card style={{ marginTop: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <b>{t('Current resources', '现有资源')}</b>
-          <span>
-            <Tag minimal intent={storedHave.manual ? 'warning' : 'success'}>
-              {storedHave.manual ? t('manual', '手动') : t('from poi', '来自 poi')}
-            </Tag>
-            {storedHave.manual && poiResources ? (
-              <Button
-                small
-                minimal
-                style={{ marginLeft: 4 }}
-                onClick={() => dispatch(setHave(poiResources, false))}
-              >
-                {t('Resync', '重新同步')}
-              </Button>
-            ) : null}
-          </span>
-        </div>
-        <Divider style={{ margin: '8px 0' }} />
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {HAVE_FIELDS.map(field => (
-            <div key={field.key} style={{ minWidth: 100 }}>
-              <div className="bp6-text-muted" style={{ fontSize: 11, marginBottom: 2 }}>
-                {field.label}
+                  ariaLabel={field.label}
+                />
               </div>
-              <NumberInput
-                value={typeof have[field.key] === 'number' ? have[field.key] : null}
-                min={0}
-                onChange={value =>
-                  dispatch(setHave({ ...storedHave, [field.key]: value == null ? 0 : value }, true))
-                }
-                ariaLabel={field.label}
-              />
-            </div>
-          ))}
-        </div>
-        {!poiResources ? (
-          <div className="bp6-text-muted" style={{ fontSize: 11, marginTop: 6 }}>
-            {t('Resources unavailable', '读不到 poi 的资源数据（未进入游戏？），可手动填写。')}
+            ))}
           </div>
-        ) : null}
-      </Card>
+          {!poiResources ? (
+            <div className="bp6-text-muted" style={{ fontSize: 11, marginTop: 6 }}>
+              {t('Resources unavailable', '读不到 poi 的资源数据（未进入游戏？），可手动填写。')}
+            </div>
+          ) : null}
+        </Card>
+      </Panel>
 
-      <div className="bp6-text-muted" style={{ fontSize: 11, marginTop: 10, lineHeight: 1.6 }}>
-        {t('Next step', 'S4：从 kcwiki 抓取掉落率（含样本量与统计窗口）。')}
-      </div>
+      <Panel active={tab === 'curve'}>
+        <Card>
+          <CurvePanel
+            targets={targets}
+            points={points}
+            masterShips={masterShips}
+            probTarget={probTarget}
+          />
+        </Card>
+      </Panel>
+
+      <Panel active={tab === 'config'}>
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <b>{t('Target ships', '目标舰')}</b>
+            <span className="bp6-text-muted" style={{ fontSize: 11 }}>
+              {t('Shared across points', '全局清单，各点位分别填写掉落率')}
+            </span>
+          </div>
+          <Divider style={{ margin: '8px 0' }} />
+          <TargetList
+            targets={targets}
+            masterShips={masterShips}
+            onAdd={shipId => dispatch(addTarget(shipId))}
+            onRemove={shipId => dispatch(removeTarget(shipId))}
+          />
+        </Card>
+
+        <Card style={{ marginTop: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <b>{t('Points', '点位')}</b>
+            <Button small intent="primary" icon="add" onClick={() => dispatch(addPoint())}>
+              {t('Add point', '添加点位')}
+            </Button>
+          </div>
+
+          {points.length === 0 ? (
+            <div style={{ marginTop: 8 }}>
+              <Callout intent="none">
+                {t('No point yet', '还没有点位。点「添加点位」，选择海域与格子即可。')}
+              </Callout>
+            </div>
+          ) : (
+            points.map((point, index) => (
+              <div key={point.id} style={{ marginTop: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <b>{pointTitle(point)}</b>
+                  {rateCount(point) > 0 ? (
+                    <Tag minimal>{`${rateCount(point)} ${t('rates', '项掉落率')}`}</Tag>
+                  ) : (
+                    <Tag minimal intent="warning">
+                      {t('rate missing', '未填掉落率')}
+                    </Tag>
+                  )}
+                </div>
+                <PointEditor
+                  point={point}
+                  targets={targets}
+                  masterShips={masterShips}
+                  mapareas={mapareas}
+                  fcdMap={fcdMap}
+                  onChange={patch => dispatch(updatePoint(point.id, patch))}
+                  onRate={(shipId, rate) =>
+                    rate == null
+                      ? dispatch(clearRate(point.id, shipId))
+                      : dispatch(setRate(point.id, shipId, rate))
+                  }
+                  onFetch={handleFetchRates}
+                  estimateCost={handleEstimateCost}
+                  onRemove={() => {
+                    if (window.confirm(t('Delete this point?', '删除这个点位？'))) {
+                      dispatch(removePoint(point.id))
+                    }
+                  }}
+                />
+                {index < points.length - 1 ? <Divider style={{ margin: '12px 0 0' }} /> : null}
+              </div>
+            ))
+          )}
+        </Card>
+      </Panel>
     </div>
   )
 }

@@ -150,6 +150,24 @@ test('集合「全部收集」：缺率/目标过多时给出可解释的结果'
   assert.equal(manyWithRates.n, null)
 })
 
+test('剩余资源：现有资源 − 需求，负数保留（第一页要按项标红）', () => {
+  const rows = buildShipRows({ points: POINTS, shipId: 71, probTarget: 0.9, have: HAVE })
+  const p1 = rows.find(r => r.pointId === 'p1')
+  assert.equal(p1.remaining.fuel, 10000 - 28880)
+  assert.ok(p1.remaining.fuel < 0, '不够时要保留负号')
+  assert.equal(p1.remaining.ammo, 100000 - 420 * 76)
+  assert.ok(p1.remaining.ammo > 0)
+
+  const p2 = rows.find(r => r.pointId === 'p2')
+  assert.equal(p2.remaining.fuel, 10000 - 23850)
+})
+
+test('没填消耗时不给剩余（而不是显示「剩余 = 现有」）', () => {
+  const emptyCost = [{ ...POINTS[0], cost: {} }]
+  const rows = buildShipRows({ points: emptyCost, shipId: 71, probTarget: 0.9, have: HAVE })
+  assert.equal(rows[0].remaining, null)
+})
+
 test('整份报告：single 按舰分组，其他口径按点位', () => {
   const single = buildReport({
     points: POINTS,

@@ -277,7 +277,8 @@ poi-plugin-drop-expect/
 ├── calc/                 ★ 纯函数、零依赖、测试主战场
 │   ├── probability.es    singleP/singleN/anyOfP/anyOfN/allP/allN/allCurve
 │   ├── cost.es           totalCost/maxSorties/afford
-│   └── aggregate.es      点位 × 目标 → 次数/消耗/缺口/反算（报告的唯一出处）
+│   ├── aggregate.es      点位 × 目标 → 次数/消耗/剩余/反算（报告的唯一出处）
+│   └── curve.es          每个点位一条「把握 → 次数/资源」曲线
 ├── services/
 │   ├── kcwiki.es        buildKey/fetchDrop/matchShips
 │   └── wmfg.es          读 Wheres My Fuel Gone 记录：归一化 / 按海域与时间段聚合
@@ -292,16 +293,17 @@ poi-plugin-drop-expect/
 │   ├── schema.es         sanitize（字段级校验）
 │   └── observer.es       debounce 写盘
 ├── views/
-│   ├── index.es          面板骨架（结果 → 目标舰 → 点位 → 现有资源）
-│   ├── result_table.es   结果表（single 按舰分组 / 集合按点位）
+│   ├── index.es          三页骨架：计算结果 / 期望曲线 / 点位与目标舰
+│   ├── result_table.es   结果表（资源列显示「剩余」，负数标红）
+│   ├── curve_panel.es    曲线页：目标舰与纵轴选择 + 端点数值表
+│   ├── expect_curve_chart.es 多序列曲线（每点位一条）
 │   ├── format.es         数字格式化
 │   ├── point_editor.es   点位表单
 │   ├── target_list.es    目标舰搜索/添加
 │   ├── number_input.es   带草稿的数字输入
-│   ├── probability_chart.es 概率曲线（currentColor，随主题）
 │   ├── error_boundary.es 渲染兜底
 │   ├── selectors.es      store 取值 + 派生
-│   └── settings.es       目标概率/口径/默认值（并入 index 顶部控制条）
+│   └── settings.es       目标概率/口径/默认值（并入结果页控制条）
 ├── i18n/zh-CN.json
 └── test/
     ├── loader.mjs        Node 读 .es
@@ -362,6 +364,15 @@ matchShips(ships, $ships) // -> { matched: {[shipId]: rate}, unmatched: string[]
 | S4 kcwiki 抓取 | ✅ 2026-10-19（真实接口验证通过，实机确认） |
 | S5 收尾（曲线 / i18n / 主题 / README） | ✅ 2026-10-19；**UI 细调按用户要求留到最后统一处理** |
 | S6 消耗实测统计（WMFG 海域 + 时间段均值） | ✅ 2026-10-19（真实数据验证：7-1 15959 次 / 3-2 6003 次 / 2-2 410 次） |
+| S7 标签页 UI（结果剩余资源 / 期望曲线 / 设定） | ✅ 2026-10-19，待实机确认 |
+
+### S7 起的三页结构
+
+| 页 | 内容 | 关键取舍 |
+|---|---|---|
+| 计算结果 | 把握/口径/排序 + 按目标舰分组的结果表 + 现有资源 | 资源列改为**剩余**（现有 − 需求），负数用主题危险色标红；总消耗降为副行 |
+| 期望曲线 | 选目标舰 + 选纵轴（次数/油/弹/钢/铝/桶），每点位一条曲线 | 横轴是**把握**而非次数：次数→资源是线性的，没有信息量；把握→次数是分位数，能看出多稳一点的代价与点位交叉点 |
+| 点位与目标舰 | 目标舰清单 + 各点位表单（掉落率、消耗、抓取、估算） | 设定与查看分离，避免长表单挤占结果区 |
 
 ### S1 · 骨架 + 计算核心（无 UI 也能验收）
 - `package.json` / `index.es` 占位 / `calc/*` / `test/loader.mjs`

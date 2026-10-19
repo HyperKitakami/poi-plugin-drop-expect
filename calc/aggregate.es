@@ -8,7 +8,7 @@
     all     集合「全部收集」：同上，用精确 DP
 */
 
-import { afford, maxSorties, perSortie, totalCost } from './cost'
+import { RESOURCE_KEYS, afford, maxSorties, perSortie, totalCost } from './cost'
 import {
   ALL_DP_MAX_K,
   allN,
@@ -43,6 +43,23 @@ const summarizePointCost = (point, n) => ({
   perSortie: perSortie(point.cost),
   total: Number.isFinite(n) ? totalCost(point.cost, n) : null,
 })
+
+/**
+ * 刷到目标次数后还剩多少。
+ * 负数表示不够——第一页要按项标红，所以保留符号而不是截断成 0。
+ */
+const remainingOf = (have, total) => {
+  // 五项全 0 说明消耗没填，此时「剩余 = 现有」会误导，直接不给值
+  if (!total || RESOURCE_KEYS.every(key => !total[key])) {
+    return null
+  }
+  const out = {}
+  for (const key of RESOURCE_KEYS) {
+    const pool = have && typeof have[key] === 'number' && Number.isFinite(have[key]) ? have[key] : 0
+    out[key] = pool - (total[key] || 0)
+  }
+  return out
+}
 
 const reverseFor = ({ point, probAt, have }) => {
   const { n, bottleneck } = maxSorties(point.cost, have)
@@ -94,6 +111,7 @@ export const buildShipRows = ({ points, shipId, probTarget, have }) => {
       expected: q > 0 ? 1 / q : Infinity,
       per,
       total,
+      remaining: remainingOf(have, total),
       totalFuel: total ? total.fuel : null,
       budget,
       reverse: reverseFor({ point, probAt: k => singleP(q, k), have }),
@@ -130,6 +148,7 @@ export const buildSetRow = ({ point, shipIds, mode, probTarget, have, index = 0 
     missing,
     expected: null,
     total: null,
+    remaining: null,
     totalFuel: null,
     budget: null,
     reverse: null,
@@ -161,6 +180,7 @@ export const buildSetRow = ({ point, shipIds, mode, probTarget, have, index = 0 
     expected,
     per,
     total,
+    remaining: remainingOf(have, total),
     totalFuel: total ? total.fuel : null,
     budget: total ? afford(have, total) : null,
     reverse: reverseFor({ point, probAt, have }),

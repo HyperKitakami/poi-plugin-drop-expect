@@ -1,8 +1,7 @@
-import React, { useState } from 'react'
-import { Button, Card, Callout, Divider, Tag } from '@blueprintjs/core'
+import React from 'react'
+import { Callout, Card, Classes, Divider, Tag } from '@blueprintjs/core'
 
-import { RESOURCE_LABEL, costLine, fmtCount, fmtPercent } from './format'
-import { ProbabilityChart } from './probability_chart'
+import { RESOURCE_LABEL, costLine, fmtBucket, fmtCount, fmtPercent } from './format'
 import { resolveShipName } from './selectors'
 import { t } from './i18n'
 
@@ -11,45 +10,49 @@ import { t } from './i18n'
 
   single 口径按目标舰分组（每艘船一组，组内是各点位对比，D8）；
   anyOf / all 是集合口径，以点位为单位一行。
+
+  资源列展示的是「刷到目标次数后还剩多少」，负数标红——
+  比「总共要花多少」更直接：一眼能看出哪项会先见底。
 */
 
-const BudgetCell = ({ budget }) => {
-  if (!budget) {
-    return <span className="bp6-text-muted">—</span>
+const DANGER = Classes.TEXT_DANGER || 'bp6-text-danger'
+const MUTED = 'bp6-text-muted'
+const ORDER = ['fuel', 'ammo', 'steel', 'bauxite', 'bucket']
+
+const fmtSigned = (value, key) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '—'
   }
-  if (budget.ok) {
-    return (
-      <Tag minimal intent="success">
-        {t('affordable', '够')}
-      </Tag>
-    )
-  }
-  const worst = Object.entries(budget.shortfall).sort((a, b) => b[1] - a[1])[0]
-  return (
-    <Tag minimal intent="danger">
-      {t('short', '缺')}
-      {RESOURCE_LABEL[worst[0]]} {fmtShort(worst[1])}
-    </Tag>
-  )
+  const abs = Math.abs(value)
+  const text =
+    key === 'bucket'
+      ? fmtBucket(abs)
+      : abs >= 10000
+        ? `${(abs / 10000).toFixed(1)}万`
+        : Math.round(abs).toLocaleString('zh-CN')
+  return value < 0 ? `-${text}` : text
 }
 
-/** 缺口只显示一个数，不和五项消耗挤在一起 */
-const fmtShort = v => {
-  if (!Number.isFinite(v)) {
-    return ''
-  }
-  return v >= 10000 ? `${(v / 10000).toFixed(1)}万` : Math.round(v).toLocaleString('zh-CN')
-}
-
-const ReverseCell = ({ reverse }) => {
-  if (!reverse) {
-    return <span className="bp6-text-muted">—</span>
+const RemainingCell = ({ remaining, total }) => {
+  if (!remaining) {
+    return <span className={MUTED}>—</span>
   }
   return (
-    <span className="bp6-text-muted" style={{ fontSize: 11 }}>
-      {t('at most', '最多')} {fmtCount(reverse.n)} {t('sorties', '次')} → {fmtPercent(reverse.prob, 1)}
-      {reverse.bottleneck ? `（${RESOURCE_LABEL[reverse.bottleneck]}）` : ''}
-    </span>
+    <div>
+      <div>
+        {ORDER.map((key, index) => (
+          <span key={key} className={remaining[key] < 0 ? DANGER : undefined}>
+            {index > 0 ? <span className={MUTED}> / </span> : null}
+            {RESOURCE_LABEL[key]} {fmtSigned(remaining[key], key)}
+          </span>
+        ))}
+      </div>
+      {total ? (
+        <div className={MUTED} style={{ fontSize: 11 }}>
+          {t('Total spent', '共消耗')} {costLine(total)}
+        </div>
+      ) : null}
+    </div>
   )
 }
 
@@ -57,29 +60,34 @@ const SortieCell = ({ row }) => (
   <span>
     <b>{fmtCount(row.n)}</b>
     {row.expected != null && Number.isFinite(row.expected) ? (
-      <span className="bp6-text-muted" style={{ fontSize: 11, marginLeft: 4 }}>
+      <span className={MUTED} style={{ fontSize: 11, marginLeft: 4 }}>
         {t('avg', '平均')} {fmtCount(Math.round(row.expected))}
       </span>
     ) : null}
   </span>
 )
 
-const CostCell = ({ row }) => (
-  <span>
-    <span>{costLine(row.total, { zeroDash: true })}</span>
-    {row.per ? (
-      <span className="bp6-text-muted" style={{ fontSize: 11, marginLeft: 4 }}>
-        ×{costLine(row.per)}
-      </span>
-    ) : null}
-  </span>
-)
+const ReverseCell = ({ reverse }) => {
+  if (!reverse) {
+    return <span className={MUTED}>—</span>
+  }
+  return (
+    <span className={MUTED} style={{ fontSize: 11 }}>
+      {t('at most', '最多')} {fmtCount(reverse.n)} {t('sorties', '次')} → {fmtPercent(reverse.prob, 1)}
+      {reverse.bottleneck ? `（${RESOURCE_LABEL[reverse.bottleneck]}）` : ''}
+    </span>
+  )
+}
 
-const ShipGroup = ({ group, masterShips, probTarget }) => {
+const ReasonText = ({ row }) =>
+  row.reason === 'incomplete-set'
+    ? t('Incomplete set', `有 ${row.missing.length} 艘目标舰未填写掉落率，无法集齐`)
+    : row.reason === 'too-many-targets'
+      ? t('Too many targets', '目标超过 12 艘，无法精确计算')
+      : t('No rate', '该点位没有填写掉落率')
+
+const ShipGroup = ({ group, masterShips }) => {
   const best = group.rows[0]
-  const [showCurve, setShowCurve] = useState(false)
-  const canDrawCurve = !!best && Number.isFinite(best.n) && best.q > 0
-
   return (
     <Card style={{ marginTop: 8 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -92,17 +100,6 @@ const ShipGroup = ({ group, masterShips, probTarget }) => {
             {t('best', '最优')} {best.label} · {fmtCount(best.n)} {t('sorties', '次')}
           </Tag>
         ) : null}
-        {canDrawCurve ? (
-          <Button
-            small
-            minimal
-            rightIcon={showCurve ? 'chevron-up' : 'chevron-down'}
-            style={{ marginLeft: 'auto' }}
-            onClick={() => setShowCurve(v => !v)}
-          >
-            {t('Curve', '概率曲线')}
-          </Button>
-        ) : null}
       </div>
       <Divider style={{ margin: '8px 0' }} />
       <table className="bp6-html-table bp6-html-table-condensed" style={{ width: '100%' }}>
@@ -111,8 +108,7 @@ const ShipGroup = ({ group, masterShips, probTarget }) => {
             <th>{t('Point', '点位')}</th>
             <th>{t('Drop rate', '掉落率')}</th>
             <th>{t('Sorties', '所需次数')}</th>
-            <th>{t('Total cost', '总消耗')}</th>
-            <th>{t('Budget', '资源')}</th>
+            <th>{t('Remaining', '剩余资源')}</th>
             <th>{t('Reverse', '反算')}</th>
           </tr>
         </thead>
@@ -127,7 +123,7 @@ const ShipGroup = ({ group, masterShips, probTarget }) => {
                   </Tag>
                 ) : null}
                 {row.reachRate < 1 ? (
-                  <span className="bp6-text-muted" style={{ fontSize: 11, marginLeft: 4 }}>
+                  <span className={MUTED} style={{ fontSize: 11, marginLeft: 4 }}>
                     {t('reach', '到达')} {fmtPercent(row.reachRate, 0)}
                   </span>
                 ) : null}
@@ -137,10 +133,7 @@ const ShipGroup = ({ group, masterShips, probTarget }) => {
                 <SortieCell row={row} />
               </td>
               <td>
-                <CostCell row={row} />
-              </td>
-              <td>
-                <BudgetCell budget={row.budget} />
+                <RemainingCell remaining={row.remaining} total={row.total} />
               </td>
               <td>
                 <ReverseCell reverse={row.reverse} />
@@ -149,15 +142,6 @@ const ShipGroup = ({ group, masterShips, probTarget }) => {
           ))}
         </tbody>
       </table>
-
-      {showCurve && canDrawCurve ? (
-        <div style={{ marginTop: 8 }}>
-          <ProbabilityChart q={best.q} nTarget={best.n} target={probTarget} />
-          <div className="bp6-text-muted" style={{ fontSize: 11, textAlign: 'center' }}>
-            {t('Curve hint', '横轴为出击次数，纵轴为至少获得一艘的概率（按最优点位）')}
-          </div>
-        </div>
-      ) : null}
     </Card>
   )
 }
@@ -169,8 +153,7 @@ const SetTable = ({ rows }) => (
         <tr>
           <th>{t('Point', '点位')}</th>
           <th>{t('Sorties', '所需次数')}</th>
-          <th>{t('Total cost', '总消耗')}</th>
-          <th>{t('Budget', '资源')}</th>
+          <th>{t('Remaining', '剩余资源')}</th>
           <th>{t('Reverse', '反算')}</th>
         </tr>
       </thead>
@@ -179,12 +162,8 @@ const SetTable = ({ rows }) => (
           row.reason ? (
             <tr key={row.pointId}>
               <td>{row.label}</td>
-              <td colSpan={4} className="bp6-text-muted">
-                {row.reason === 'incomplete-set'
-                  ? t('Incomplete set', `有 ${row.missing.length} 艘目标舰未填写掉落率，无法集齐`)
-                  : row.reason === 'too-many-targets'
-                    ? t('Too many targets', '目标超过 12 艘，无法精确计算')
-                    : t('No rate', '该点位没有填写掉落率')}
+              <td colSpan={3} className={MUTED}>
+                <ReasonText row={row} />
               </td>
             </tr>
           ) : (
@@ -206,10 +185,7 @@ const SetTable = ({ rows }) => (
                 <SortieCell row={row} />
               </td>
               <td>
-                <CostCell row={row} />
-              </td>
-              <td>
-                <BudgetCell budget={row.budget} />
+                <RemainingCell remaining={row.remaining} total={row.total} />
               </td>
               <td>
                 <ReverseCell reverse={row.reverse} />
@@ -222,7 +198,7 @@ const SetTable = ({ rows }) => (
   </Card>
 )
 
-const ResultTable = ({ report, masterShips, probTarget = 0.9 }) => {
+const ResultTable = ({ report, masterShips }) => {
   const empty = report.mode === 'single' ? report.groups.length === 0 : report.rows.length === 0
 
   if (empty) {
@@ -240,7 +216,7 @@ const ResultTable = ({ report, masterShips, probTarget = 0.9 }) => {
     return (
       <div>
         {report.groups.map(group => (
-          <ShipGroup key={group.shipId} group={group} masterShips={masterShips} probTarget={probTarget} />
+          <ShipGroup key={group.shipId} group={group} masterShips={masterShips} />
         ))}
       </div>
     )
