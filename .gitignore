@@ -13,3 +13,4 @@ docs/references/
 # 系统垃圾
 Thumbs.db
 .DS_Store
+.tmp-*

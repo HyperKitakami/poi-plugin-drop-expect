@@ -90,5 +90,17 @@
   "Last stats": "上次统计",
   "node unset": "未设置目标点",
   "Remodeled hint": "「{0}」为改装形态，掉落统计按「{1}」记录",
-  "Add base ship": "改为加入"
+  "Add base ship": "改为加入",
+  "Find points": "反查点位",
+  "Close": "关闭",
+  "No drop records": "该舰在索引里没有掉落记录（索引只覆盖到 2022 年前后，新舰可能查不到）",
+  "Index time": "索引更新于",
+  "Index note": "按样本量排序；旧索引可能缺少较新的点位，加入后会按当前数据校正掉落率",
+  "Existing point": "已有点位",
+  "Candidate only": "候选来自旧索引，加入后会重新抓取当前掉落率",
+  "Add selected": "加入选中",
+  "Added points": "已加入",
+  "Rates refreshed": "已校正",
+  "Fetch failed": "抓取失败",
+  "Not in current data": "有 {0} 个点位在当前数据里没有该舰，可能已移出掉落池（已保留，可手动删除）"
 }

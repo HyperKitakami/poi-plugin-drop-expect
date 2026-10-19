@@ -125,6 +125,12 @@ const requestJson = (url, redirects = 0) =>
         body += chunk
       })
       response.on('end', () => {
+        // 舰船索引对「没有这份数据」的舰船返回 200 + 空 body（不是 404），
+        // 所以这里必须先判空，否则会被当成「结构变了」
+        if (body.trim() === '') {
+          reject(fail('EMPTY', '返回内容为空'))
+          return
+        }
         try {
           resolve(JSON.parse(body))
         } catch (err) {
@@ -203,3 +209,94 @@ export const matchShips = (ships, masterShips) => {
   }
   return { matched, unmatched }
 }
+
+/*
+  反向查询：某艘舰在哪些点位掉落。
+
+  接口是 db.kcwiki.cn/drop/ship/{舰船ID}/{评价}.json，页面 /drop/ship/153 用的就是它。
+  一条请求拿全所有点位，比「逐图逐格抓」便宜几个数量级。
+
+  ⚠️ 这份索引**明显滞后**：实测 2026-10 时 generateTime 仍是 2022-05-11，
+  且 700 以后的舰船 ID 直接 404（索引只覆盖当年存在的舰）。
+  所以它只能当「候选来源」用，掉落率必须再用点位接口（§fetchDrop）校正一次。
+*/
+
+const DIFFICULTY_LEVEL = { 丁: 1, 丙: 2, 乙: 3, 甲: 4 }
+
+/** 解析索引键：'2-2-B'、'5-4-Z(Boss)'、'48-7-Z(Boss)-甲' → 点位 */
+export const parseShipDropKey = key => {
+  if (typeof key !== 'string') {
+    return null
+  }
+  // Boss 标记可能夹在难度前面（'48-7-Z(Boss)-甲'），所以整串剔除，不能只处理结尾
+  const isBoss = /\(boss\)/i.test(key)
+  const parts = key.replace(/\(boss\)/gi, '').trim().split('-')
+  if (parts.length < 3) {
+    return null
+  }
+  const [area, no, rawCell, rawLevel] = parts
+  if (!/^\d+$/.test(area) || !/^\d+$/.test(no)) {
+    return null
+  }
+  const cell = String(rawCell || '').trim().toUpperCase()
+  if (!/^[A-Z]{1,3}$/.test(cell)) {
+    return null
+  }
+  const level = rawLevel && DIFFICULTY_LEVEL[rawLevel] ? DIFFICULTY_LEVEL[rawLevel] : 0
+  return { mapId: `${area}-${no}`, cell, level, isBoss }
+}
+
+export const parseShipDropPayload = json => {
+  const data = json && json.data
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw fail('PARSE', '返回结构异常')
+  }
+  const entries = []
+  for (const [key, info] of Object.entries(data)) {
+    const point = parseShipDropKey(key)
+    if (!point || !info || typeof info !== 'object') {
+      continue
+    }
+    const rate = Number(info.rate)
+    if (!Number.isFinite(rate) || rate <= 0) {
+      continue
+    }
+    entries.push({
+      ...point,
+      rate: clamp01(rate / 100),
+      count: Number(info.totalCount) || 0,
+    })
+  }
+  /*
+    按**样本量**降序，而不是按掉落率。
+
+    索引里混着大量 n=3 的偶然掉落（14% 之类），按率排会把首屏塞满噪声；
+    样本多的点位才是「大家都在刷的点」，率也更值得参考。
+    率相同的再按率排，保证顺序稳定。
+  */
+  entries.sort((a, b) => b.count - a.count || b.rate - a.rate)
+  return {
+    totalCount: Number(json.totalCount) || 0,
+    generatedAt: typeof json.generateTime === 'string' ? json.generateTime : null,
+    entries,
+  }
+}
+
+export const fetchShipDrops = (shipId, rank = 'SAB') => {
+  const id = Number(shipId)
+  if (!Number.isInteger(id) || id <= 0) {
+    return Promise.reject(fail('BAD_SHIP', '舰船 ID 不合法'))
+  }
+  if (!RANKS.has(rank)) {
+    return Promise.reject(fail('BAD_SHIP', '评价不合法'))
+  }
+  return requestJson(`https://db.kcwiki.cn/drop/ship/${id}/${rank}.json`).then(json => {
+    const parsed = parseShipDropPayload(json)
+    if (parsed.entries.length === 0) {
+      throw fail('EMPTY', '该舰船没有掉落记录')
+    }
+    return parsed
+  })
+}
+
+export const pointKeyOf = point => `${point.mapId}|${point.cell}|${Number(point.level) || 0}`

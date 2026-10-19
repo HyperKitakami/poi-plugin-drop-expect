@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react'
 import { Button, Callout, InputGroup, Tag } from '@blueprintjs/core'
 
+import { pointKeyOf } from '../services/kcwiki'
+import { ReverseLookup } from './reverse_lookup'
 import { findHiddenShipMatch, getShipOptions, resolveShipName, shipMatchesQuery } from './selectors'
 import { t } from './i18n'
 
@@ -11,11 +13,19 @@ const MAX_RESULTS = 12
 
   舰船列表来自 poi 自带的 const.$ships（登录后才有），不需要联网，
   也不要用 kcwikizh 的 3MB all.json —— 旧实现那份是多余的。
+
+  每艘船右侧的放大镜是「反查点位」：用 kcwiki 的舰船索引找出它掉在哪几个点，
+  勾选后连同掉落率一起加入配置（率由点位接口校正，见 reverse_lookup.es）。
 */
-const TargetList = ({ targets, masterShips, onAdd, onRemove }) => {
+const TargetList = ({ targets, masterShips, points, onAdd, onRemove, onApplyReverse }) => {
   const [query, setQuery] = useState('')
+  const [lookupShip, setLookupShip] = useState(null)
   const options = useMemo(() => getShipOptions(masterShips), [masterShips])
   const picked = useMemo(() => new Set(targets.map(item => item.shipId)), [targets])
+  const existingKeys = useMemo(
+    () => new Set((points || []).map(point => pointKeyOf(point))),
+    [points],
+  )
   const results = useMemo(() => {
     if (!query.trim()) {
       return []
@@ -42,14 +52,24 @@ const TargetList = ({ targets, masterShips, onAdd, onRemove }) => {
           <span className="bp6-text-muted">{t('No target yet', '还没有目标舰。')}</span>
         ) : (
           targets.map(item => (
-            <Tag
+            <span
               key={item.shipId}
-              intent="primary"
-              onRemove={() => onRemove(item.shipId)}
-              style={{ marginBottom: 4 }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 2, marginBottom: 4 }}
             >
-              {resolveShipName(masterShips, item.shipId)}
-            </Tag>
+              <Tag intent="primary" onRemove={() => onRemove(item.shipId)}>
+                {resolveShipName(masterShips, item.shipId)}
+              </Tag>
+              <Button
+                minimal
+                small
+                icon="search"
+                aria-label={t('Find points', '反查点位')}
+                title={t('Find points', '反查点位')}
+                onClick={() =>
+                  setLookupShip({ shipId: item.shipId, name: resolveShipName(masterShips, item.shipId) })
+                }
+              />
+            </span>
           ))
         )}
       </div>
@@ -116,6 +136,17 @@ const TargetList = ({ targets, masterShips, onAdd, onRemove }) => {
           ) : null}
         </>
       )}
+
+      {lookupShip ? (
+        <ReverseLookup
+          key={lookupShip.shipId}
+          shipId={lookupShip.shipId}
+          shipName={lookupShip.name}
+          existingKeys={existingKeys}
+          onClose={() => setLookupShip(null)}
+          onApply={pickedPoints => onApplyReverse(lookupShip.shipId, lookupShip.name, pickedPoints)}
+        />
+      ) : null}
     </div>
   )
 }

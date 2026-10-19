@@ -8,6 +8,9 @@ import {
   buildUrl,
   matchShips,
   parseDropPayload,
+  parseShipDropKey,
+  parseShipDropPayload,
+  pointKeyOf,
 } from '../services/kcwiki.es'
 
 test('缓存键：普通图不带难度后缀', () => {
@@ -94,4 +97,64 @@ test('匹配：缺舰船列表时全部 unmatched，不抛错', () => {
   const { matched, unmatched } = matchShips({ 利根: { rate: 0.01 } }, null)
   assert.deepEqual(matched, {})
   assert.deepEqual(unmatched, ['利根'])
+})
+
+test('反查键：普通格、Boss 格、活动难度都能解析', () => {
+  assert.deepEqual(parseShipDropKey('2-2-B'), { mapId: '2-2', cell: 'B', level: 0, isBoss: false })
+  assert.deepEqual(parseShipDropKey('5-4-Z(Boss)'), {
+    mapId: '5-4',
+    cell: 'Z',
+    level: 0,
+    isBoss: true,
+  })
+  assert.deepEqual(parseShipDropKey('48-7-Y-甲'), { mapId: '48-7', cell: 'Y', level: 4, isBoss: false })
+  assert.deepEqual(parseShipDropKey('48-7-Z(Boss)-丁'), {
+    mapId: '48-7',
+    cell: 'Z',
+    level: 1,
+    isBoss: true,
+  })
+  assert.deepEqual(parseShipDropKey('6-5-AB'), { mapId: '6-5', cell: 'AB', level: 0, isBoss: false })
+})
+
+test('反查键：非法键返回 null，不抛错', () => {
+  for (const bad of ['', 'x', '2-2', 'a-2-B', '2-2-', null, undefined, 42]) {
+    assert.equal(parseShipDropKey(bad), null, String(bad))
+  }
+})
+
+test('反查返回：百分比转小数、剔除 0 率、按掉率降序', () => {
+  const parsed = parseShipDropPayload({
+    totalCount: 900,
+    generateTime: '2022-05-11 00:33:55',
+    data: {
+      '2-2-B': { rate: 1.177, totalCount: 6325 },
+      '3-3-M(Boss)': { rate: 0.5, totalCount: 100 },
+      '4-4-A': { rate: 0, totalCount: 10 },
+      '坏键': { rate: 9, totalCount: 1 },
+    },
+  })
+  assert.equal(parsed.generatedAt, '2022-05-11 00:33:55')
+  assert.equal(parsed.totalCount, 900)
+  assert.deepEqual(
+    parsed.entries.map(item => [item.mapId, item.cell, item.isBoss, Number(item.rate.toFixed(4))]),
+    [
+      ['2-2', 'B', false, 0.0118],
+      ['3-3', 'M', true, 0.005],
+    ],
+  )
+})
+
+test('反查返回：结构不对直接抛 PARSE', () => {
+  for (const bad of [null, {}, { data: [] }, { data: 'x' }]) {
+    assert.throws(() => parseShipDropPayload(bad), err => err.code === 'PARSE')
+  }
+})
+
+test('点位键：同格不同难度视为不同点位', () => {
+  assert.equal(pointKeyOf({ mapId: '2-2', cell: 'B', level: 0 }), '2-2|B|0')
+  assert.notEqual(
+    pointKeyOf({ mapId: '48-7', cell: 'Z', level: 1 }),
+    pointKeyOf({ mapId: '48-7', cell: 'Z', level: 4 }),
+  )
 })

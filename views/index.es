@@ -177,6 +177,69 @@ const PanelContent = () => {
   )
 
   /*
+    反查点位：把 kcwiki 舰船索引给出的候选点位加入配置。
+
+    索引是旧的（实测停在 2022-05），所以「加入」和「校正」分开做：
+    先按候选建点位并挂上该舰，再逐点抓当前数据覆盖掉落率。
+    抓不到该舰的点位保留（可能只是样本少），但会在返回值里计数，
+    由界面提示用户自己删。
+  */
+  const handleReverseAdd = useCallback(
+    async (shipId, shipName, candidates) => {
+      const created = candidates.map(candidate => {
+        const action = addPoint({
+          mapId: candidate.mapId,
+          cell: candidate.cell,
+          level: candidate.level,
+          note: `${shipName} 反查`,
+        })
+        dispatch(action)
+        dispatch(linkRate(action.point.id, shipId))
+        return { pointId: action.point.id, ...candidate }
+      })
+
+      let confirmed = 0
+      let missing = 0
+      let failed = 0
+      for (const item of created) {
+        try {
+          const data = await fetchDrop({
+            mapId: item.mapId,
+            cell: item.cell,
+            level: item.level,
+            rank: 'SAB',
+          })
+          const { matched } = matchShips(data.ships, masterShips)
+          const rate = matched[shipId]
+          if (typeof rate !== 'number' || rate <= 0) {
+            missing += 1
+            continue
+          }
+          dispatch(
+            setRate(item.pointId, shipId, rate, {
+              source: 'kcwiki',
+              sampleSize: data.totalCount,
+              timeRange: data.timeRange || undefined,
+              fetchedAt: data.fetchedAt,
+            }),
+          )
+          confirmed += 1
+        } catch (err) {
+          // 404 / 无样本都算「当前数据里没有」，与「网络失败」分开计
+          if (err && (err.code === 'NOT_FOUND' || err.code === 'EMPTY')) {
+            missing += 1
+          } else {
+            failed += 1
+          }
+        }
+      }
+
+      return { added: created.length, confirmed, missing, failed }
+    },
+    [dispatch, masterShips],
+  )
+
+  /*
     从 WMFG 的出击记录估算「某海域 + 某时间段」的平均消耗。
 
     记录里只有海域、没有格子，所以得到的是整个海域的均值：
@@ -349,8 +412,10 @@ const PanelContent = () => {
           <TargetList
             targets={targets}
             masterShips={masterShips}
+            points={points}
             onAdd={shipId => dispatch(addTarget(shipId))}
             onRemove={shipId => dispatch(removeTarget(shipId))}
+            onApplyReverse={handleReverseAdd}
           />
         </Card>
 

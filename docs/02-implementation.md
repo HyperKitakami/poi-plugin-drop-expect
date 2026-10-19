@@ -280,7 +280,7 @@ poi-plugin-drop-expect/
 │   ├── aggregate.es      点位 × 目标 → 次数/消耗/剩余/反算（报告的唯一出处）
 │   └── curve.es          每个点位一条「期望 → 次数/资源」曲线
 ├── services/
-│   ├── kcwiki.es        buildKey/fetchDrop/matchShips
+│   ├── kcwiki.es        buildKey/fetchDrop/matchShips + fetchShipDrops（舰 → 点位反查）
 │   └── wmfg.es          读 Wheres My Fuel Gone 记录：归一化 / 按海域与时间段聚合
 ├── redux/
 │   ├── index.es          合成 + API 无关，只处理自定义 action
@@ -333,6 +333,12 @@ buildKey({ mapId, cell, level, rank })  // 'drop_map_22_B-SAB'
 fetchDrop(point)        // -> { totalCount, timeRange, ships: { name: {rate,count,rankCount} } }
                         // 抛 typed error: 'NOT_FOUND' | 'EMPTY' | 'NETWORK' | 'PARSE'
 matchShips(ships, $ships) // -> { matched: {[shipId]: rate}, unmatched: string[] }
+
+// 反向查询（舰 → 点位）
+fetchShipDrops(shipId, rank)  // GET /drop/ship/{id}/{rank}.json
+                              // -> { totalCount, generatedAt, entries: [{mapId,cell,level,isBoss,rate,count}] }
+parseShipDropKey('48-7-Z(Boss)-甲') // -> { mapId:'48-7', cell:'Z', level:1, isBoss:true }
+pointKeyOf({mapId,cell,level})      // '2-2|B|0'  用于去重/禁用已配点位
 ```
 
 **约束**：`calc/` 与 `store/schema.es` 不得 import 任何 poi / React / Electron 模块，也不得 import `services/`。`services/` 与 `store/p-state.es` 不得被 reducer 静态 import（副作用经 `index.es` 注入）。
@@ -366,7 +372,8 @@ matchShips(ships, $ships) // -> { matched: {[shipId]: rate}, unmatched: string[]
 | S5 收尾（曲线 / i18n / 主题 / README） | ✅ 2026-10-19；**UI 细调按用户要求留到最后统一处理** |
 | S6 消耗实测统计（WMFG 海域 + 时间段均值） | ✅ 2026-10-19（真实数据验证：7-1 15959 次 / 3-2 6003 次 / 2-2 410 次） |
 | S7 标签页 UI（结果剩余资源 / 期望曲线 / 设定） | ✅ 2026-10-19，实机确认 |
-| S8 设定页重构（点位卡片 / 备注 / 目标点 / 消耗两行 / 手选加入） | ✅ 2026-10-19，待实机确认 |
+| S8 设定页重构（点位卡片 / 备注 / 目标点 / 消耗两行 / 手选加入） | ✅ 2026-10-19，实机确认 |
+| S9 按目标舰反查点位（旧索引候选 + 点位接口校正） | ✅ 2026-10-19，真实数据验证（排序按样本量；索引停在 2022-05） |
 
 ### S7 起的三页结构
 
