@@ -69,3 +69,21 @@ export const costLine = (cost, { zeroDash = false } = {}) => {
   }
   return parts.join(' / ')
 }
+
+/**
+ 加权消耗：五项折成一个数，量级可能很小（权重 0.3）也可能很大（桶 200）。
+ 只在加权排序时显示，所以按「大到万、小到一位小数」处理即可。
+*/
+export const fmtWeighted = value => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return '—'
+  }
+  const abs = Math.abs(value)
+  const text =
+    abs >= 10000
+      ? `${(abs / 10000).toFixed(1)}万`
+      : abs >= 100
+        ? Math.round(abs).toLocaleString('zh-CN')
+        : abs.toFixed(1)
+  return value < 0 ? `-${text}` : text
+}

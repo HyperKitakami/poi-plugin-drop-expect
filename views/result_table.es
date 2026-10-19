@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { Button, Callout, Card, Classes, Divider, Tag } from '@blueprintjs/core'
 
-import { RESOURCE_LABEL, fmtBucket, fmtCount, fmtPercent } from './format'
+import { RESOURCE_LABEL, fmtBucket, fmtCount, fmtPercent, fmtWeighted } from './format'
 import { resolveShipName } from './selectors'
 import { ACCENT_COLOR } from './theme'
 import { t } from './i18n'
@@ -37,7 +37,7 @@ const fmtValue = (value, key) => {
   return value < 0 ? `-${text}` : text
 }
 
-const ResourceCell = ({ remaining, total }) => {
+const ResourceCell = ({ remaining, total, weighted }) => {
   if (!remaining || !total) {
     return <span className={MUTED}>—</span>
   }

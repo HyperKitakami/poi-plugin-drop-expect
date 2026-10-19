@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { costLine, fmtAmount, fmtBucket, fmtCount, fmtPercent } from '../views/format.es'
+import { costLine, fmtAmount, fmtBucket, fmtCount, fmtPercent, fmtWeighted } from '../views/format.es'
 
 test('百分比：整数位末尾的 0 不能被吃掉', () => {
   // 回归：曾经把 '90' 修剪成 '9'，界面上显示「期望 9%」
@@ -45,4 +45,14 @@ test('次数与消耗行', () => {
     costLine({ fuel: 28880, ammo: 31920, steel: 9120, bauxite: 3040, bucket: 22.8 }),
     '2.9万 / 3.2万 / 9,120 / 3,040 / 22.8',
   )
+})
+
+test('加权值：小于 100 保留一位小数，大数走万', () => {
+  assert.equal(fmtWeighted(1380), '1,380')
+  assert.equal(fmtWeighted(4500), '4,500')
+  assert.equal(fmtWeighted(12345), '1.2万')
+  assert.equal(fmtWeighted(12.34), '12.3')
+  assert.equal(fmtWeighted(0), '0.0')
+  assert.equal(fmtWeighted(null), '—')
+  assert.equal(fmtWeighted(Infinity), '—')
 })
