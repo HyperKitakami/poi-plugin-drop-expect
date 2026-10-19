@@ -57,12 +57,31 @@ test('掉落率：只留合法条目，来源缺省为 manual', () => {
   assert.equal(rates[71].timeRange.length, 2)
 })
 
-test('点位备注：保留，过长截断', () => {
+test('点位标签：去空白、截到 10 字、去重、最多 5 个', () => {
   const state = sanitizePState({
-    points: [{ id: 'p', mapId: '2-2', cell: 'B', note: 'x'.repeat(80) }, { id: 'q', mapId: '1-1', cell: 'A' }],
+    points: [
+      {
+        id: 'p',
+        mapId: '2-2',
+        cell: 'B',
+        tags: ['  E1  ', 'x'.repeat(20), '', 42, 'E1', 'b', 'c', 'd', 'e', 'f'],
+      },
+      { id: 'q', mapId: '1-1', cell: 'A' },
+    ],
   })
-  assert.equal(state.points[0].note.length, 40)
-  assert.equal(state.points[1].note, '')
+  assert.deepEqual(state.points[0].tags, ['E1', 'xxxxxxxxxx', 'b', 'c', 'd'])
+  assert.deepEqual(state.points[1].tags, [], '没标签就是空数组')
+})
+
+test('老存档的 note 迁成第一个标签', () => {
+  const state = sanitizePState({
+    points: [{ id: 'p', mapId: '2-2', cell: 'B', note: 'E1 捞船计划' }],
+  })
+  assert.deepEqual(state.points[0].tags, ['E1 捞船计划'], '10 字以内原样保留')
+  assert.equal(state.points[0].note, undefined, '不再输出 note 字段')
+
+  const long = sanitizePState({ points: [{ id: 'p', mapId: '2-2', cell: 'B', note: 'x'.repeat(40) }] })
+  assert.equal(long.points[0].tags[0].length, 10)
 })
 
 test('掉落率：允许「已加入但未填率」，非法值仍丢弃', () => {

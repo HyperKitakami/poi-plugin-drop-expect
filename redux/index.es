@@ -70,7 +70,7 @@ const normalize = state => ({
 const isShaped = state =>
   !!state && typeof state === 'object' && Array.isArray(state.points) && Array.isArray(state.targets)
 
-const PATCHABLE = ['note', 'mapId', 'cell', 'level', 'rank', 'reachRate', 'cost', 'rates']
+const PATCHABLE = ['tags', 'mapId', 'cell', 'level', 'rank', 'reachRate', 'cost', 'rates']
 
 const patchPoint = (point, patch) => {
   const next = { ...point }

@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Callout, Card, Divider, HTMLSelect, InputGroup, Tag } from '@blueprintjs/core'
 
 import { findHiddenShipMatch, getMapOptions, getShipOptions, getSpotOptions, isEventArea, resolveShipName, shipMatchesQuery } from './selectors'
 import { NumberInput } from './number_input'
 import { SuggestInput } from './suggest_input'
 import { ACCENT_COLOR } from './theme'
+import { MAX_TAG_LEN, MAX_TAGS } from '../store/schema'
 import { t } from './i18n'
 
 /*
@@ -18,6 +19,37 @@ import { t } from './i18n'
   「目标舰」的归属靠 point.rates 的键决定：有键 = 已加入本点位（rate 可能是 null，
   表示加入了但还没填率）。全局 targets 只是候选池，两处通过 linkRate 打通。
 */
+
+/*
+  表头里的标签。
+
+  默认不带删除按钮：一排 × 会让表头显得很吵；鼠标移上去才浮出一个小 ×。
+  用 span + bp6-tag 而不是 Blueprint 的 Tag，是因为 Tag 的 onRemove 会常显 ×。
+*/
+const TagChip = ({ text, onRemove }) => {
+  const [hover, setHover] = useState(false)
+  return (
+    <span
+      className="bp6-tag bp6-minimal"
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}
+    >
+      {text}
+      {hover ? (
+        <span
+          role="button"
+          tabIndex={-1}
+          onClick={onRemove}
+          aria-label={t('Remove tag', '删除标签')}
+          style={{ cursor: 'pointer', opacity: 0.65, fontSize: 11, lineHeight: 1 }}
+        >
+          ×
+        </span>
+      ) : null}
+    </span>
+  )
+}
 
 const RANKS = ['SAB', 'SA', 'S', 'A', 'B']
 
@@ -190,6 +222,53 @@ const PointCard = ({
   */
   const [open, setOpen] = useState(() => !point.mapId || !point.cell)
   const [pickerOpen, setPickerOpen] = useState(false)
+
+  // 点位标签：点图标才开输入框，回车加入
+  const tags = Array.isArray(point.tags) ? point.tags : []
+  const [tagOpen, setTagOpen] = useState(false)
+  const [tagDraft, setTagDraft] = useState('')
+  const tagInputRef = useRef(null)
+
+  useEffect(() => {
+    if (tagOpen && tagInputRef.current) {
+      tagInputRef.current.focus()
+    }
+  }, [tagOpen])
+
+  const closeTagInput = () => {
+    setTagOpen(false)
+    setTagDraft('')
+  }
+
+  const commitTag = () => {
+    const text = tagDraft.trim().slice(0, MAX_TAG_LEN)
+    if (!text) {
+      closeTagInput()
+      return
+    }
+    // 重复的直接忽略，不提示——表头没有地方放下这条信息
+    if (tags.includes(text) || tags.length >= MAX_TAGS) {
+      setTagDraft('')
+      return
+    }
+    const next = [...tags, text]
+    onChange({ tags: next })
+    setTagDraft('')
+    // 到上限就收起输入框，没有继续输入的必要
+    if (next.length >= MAX_TAGS) {
+      setTagOpen(false)
+    }
+  }
+
+  const handleTagKeyDown = event => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      commitTag()
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      closeTagInput()
+    }
+  }
   const [query, setQuery] = useState('')
 
   const [fetching, setFetching] = useState(false)
@@ -370,25 +449,49 @@ const PointCard = ({
           </Tag>
         </div>
 
-        {/* 备注是对整张卡的补充说明，靠右紧挨删除按钮，不插在识别信息中间 */}
+        {/* 标签与操作靠右；标签最多 5 个，超宽时在这一块内部换行，不撑破表头 */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'flex-end',
+            flexWrap: 'wrap',
             gap: 4,
             marginLeft: 'auto',
-            flexShrink: 0,
+            maxWidth: '100%',
           }}
         >
-          {/* 注意：Blueprint 的 InputGroup 只把 style 传给内部的 <input>，
-              不会传给外层 .bp6-input-group（实测 bp6 的实现如此）。
-              所以宽度写在这里是「输入框宽度」，位置必须由外层 div 控制。 */}
-          <InputGroup
-            value={point.note || ''}
-            placeholder={t('Note', '备注（便于区分）')}
-            style={{ width: 156 }}
-            onChange={e => onChange({ note: e.target.value })}
-          />
+          {tags.map(tag => (
+            <TagChip key={tag} text={tag} onRemove={() => onChange({ tags: tags.filter(x => x !== tag) })} />
+          ))}
+
+          {/* 标签输入只在点开图标后出现：平时表头只留几个 chip，不占地方 */}
+          {tagOpen ? (
+            <InputGroup
+              inputRef={tagInputRef}
+              value={tagDraft}
+              placeholder={t('Add tag', '添加tag（回车确认）')}
+              maxLength={MAX_TAG_LEN}
+              style={{ width: 132 }}
+              onChange={e => setTagDraft(e.target.value)}
+              onKeyDown={handleTagKeyDown}
+              onBlur={closeTagInput}
+            />
+          ) : (
+            <Button
+              minimal
+              small
+              icon="annotation"
+              disabled={tags.length >= MAX_TAGS}
+              title={
+                tags.length >= MAX_TAGS
+                  ? t('Max tags', '最多 5 个标签')
+                  : t('Add tag', '添加tag（回车确认）')
+              }
+              aria-label={t('Add tag', '添加tag（回车确认）')}
+              onClick={() => setTagOpen(true)}
+            />
+          )}
           <Button
             minimal
             intent="danger"

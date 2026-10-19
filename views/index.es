@@ -4,6 +4,7 @@ import { Button, Callout, Card, Divider, HTMLSelect, Tag } from '@blueprintjs/co
 
 import { buildReport } from '../calc/aggregate'
 import { DEFAULT_WEIGHTS, normalizeWeights } from '../calc/cost'
+import { MAX_TAG_LEN } from '../store/schema'
 import { fetchDrop, matchShips } from '../services/kcwiki'
 import { aggregateRecords, readRecords } from '../services/wmfg'
 import {
@@ -208,7 +209,7 @@ const PanelContent = () => {
           mapId: candidate.mapId,
           cell: candidate.cell,
           level: candidate.level,
-          note: `${shipName} 反查`,
+          tags: [shipName.slice(0, MAX_TAG_LEN)],
         })
         dispatch(action)
         dispatch(linkRate(action.point.id, shipId))

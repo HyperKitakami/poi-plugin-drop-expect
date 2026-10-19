@@ -102,13 +102,14 @@ test('掉落率：写入、来源、超界截断、非法值忽略、清除', ()
   assert.equal(state.points[0].rates[71], undefined)
 })
 
-test('点位备注可以改，且不会被其他 patch 冲掉', () => {
+test('点位标签可以改，且不会被其他 patch 冲掉', () => {
   let state = reducer(base(), addPoint({ mapId: '2-2', cell: 'B' }))
   const id = state.points[0].id
-  state = reducer(state, updatePoint(id, { note: 'E1 捞船' }))
-  assert.equal(state.points[0].note, 'E1 捞船')
+  assert.deepEqual(state.points[0].tags, [], '新点位没有标签')
+  state = reducer(state, updatePoint(id, { tags: ['E1 捞船', '夜战'] }))
+  assert.deepEqual(state.points[0].tags, ['E1 捞船', '夜战'])
   state = reducer(state, updatePoint(id, { cell: 'K' }))
-  assert.equal(state.points[0].note, 'E1 捞船')
+  assert.deepEqual(state.points[0].tags, ['E1 捞船', '夜战'], '改别的字段不该动标签')
 })
 
 test('加入占位：有键但没填率，不覆盖已有条目', () => {

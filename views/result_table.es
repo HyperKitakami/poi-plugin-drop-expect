@@ -97,6 +97,31 @@ const ReasonText = ({ row }) =>
       ? t('Too many targets', '目标超过 12 艘，无法精确计算')
       : t('No rate', '该点位没有填写掉落率')
 
+/*
+  点位下面挂标签：只显示前两个。
+  更多的用「+N」表示，避免一行点位被标签撑开——要看全可以回设定页。
+*/
+const PointTags = ({ tags }) => {
+  if (!Array.isArray(tags) || tags.length === 0) {
+    return null
+  }
+  const shown = tags.slice(0, 2)
+  return (
+    <div style={{ marginTop: 2 }}>
+      {shown.map(tag => (
+        <Tag key={tag} minimal style={{ marginRight: 4 }}>
+          {tag}
+        </Tag>
+      ))}
+      {tags.length > shown.length ? (
+        <span className={MUTED} style={{ fontSize: 11 }}>
+          +{tags.length - shown.length}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
 const ShipGroup = ({ group, masterShips }) => {
   const best = group.rows[0]
   // 默认折叠：一艘船一个点位对比表，目标一多整页会很长
@@ -153,6 +178,7 @@ const ShipGroup = ({ group, masterShips }) => {
                         {t('reach', '到达')} {fmtPercent(row.reachRate, 0)}
                       </span>
                     ) : null}
+                    <PointTags tags={row.tags} />
                   </td>
                   <td>{fmtPercent(row.rate)}</td>
                   <td>
@@ -189,7 +215,10 @@ const SetTable = ({ rows, masterShips }) => (
         {rows.map(row =>
           row.reason ? (
             <tr key={row.pointId}>
-              <td>{row.label}</td>
+              <td>
+                {row.label}
+                <PointTags tags={row.tags} />
+              </td>
               <td colSpan={3} className={MUTED}>
                 <ReasonText row={row} />
               </td>
@@ -217,6 +246,7 @@ const SetTable = ({ rows, masterShips }) => (
                     {row.missing.length} {t('ships without rate', '艘未填率')}
                   </Tag>
                 ) : null}
+                <PointTags tags={row.tags} />
               </td>
               <td>
                 <SortieCell row={row} />

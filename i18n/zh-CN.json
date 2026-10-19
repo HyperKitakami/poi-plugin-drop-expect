@@ -75,7 +75,6 @@
   "Left": "剩余",
   "Collapse": "折叠",
   "Expand": "展开",
-  "Note": "备注（便于区分）",
   "ships": "艘",
   "Target node": "目标点",
   "Cell letter": "如 B / K",
@@ -111,5 +110,8 @@
   "Sort by custom": "按加权",
   "Weights": "权重",
   "Weighted": "加权",
-  "Reset": "重置"
+  "Reset": "重置",
+  "Add tag": "添加tag（回车确认）",
+  "Remove tag": "删除标签",
+  "Max tags": "最多 5 个标签"
 }

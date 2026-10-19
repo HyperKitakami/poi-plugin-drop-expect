@@ -309,3 +309,12 @@ test('按单项资源排序：同样沉底未填消耗的行', () => {
   })
   assert.deepEqual(report.groups[0].rows.map(r => r.pointId), ['a', 'b'])
 })
+
+test('行对象带上点位标签（结果页要显示前两个）', () => {
+  const points = [{ ...POINTS[0], tags: ['E1', '夜战', '第三个'] }]
+  const rows = buildShipRows({ points, shipId: 71, probTarget: 0.9, have: HAVE })
+  assert.deepEqual(rows[0].tags, ['E1', '夜战', '第三个'])
+
+  const setRow = buildSetRow({ point: points[0], shipIds: [71], mode: 'anyOf', probTarget: 0.9, have: HAVE })
+  assert.deepEqual(setRow.tags, ['E1', '夜战', '第三个'])
+})

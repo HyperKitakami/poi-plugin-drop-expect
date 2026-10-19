@@ -13,6 +13,10 @@ export const RANK_OPTIONS = ['SAB', 'SA', 'S', 'A', 'B']
 export const LEVEL_OPTIONS = [0, 1, 2, 3, 4]
 export const RATE_SOURCES = ['manual', 'kcwiki', 'measured', 'unset']
 
+// 点位标签：一卡最多 5 个，每个最多 10 字（界面上也是这两个数）
+export const MAX_TAGS = 5
+export const MAX_TAG_LEN = 10
+
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v)
 const nonEmptyString = v => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null)
 const clamp = (v, min, max) => (v < min ? min : v > max ? max : v)
@@ -64,6 +68,31 @@ const sanitizeRates = raw => {
   return out
 }
 
+/*
+  标签清洗：去空白、截到 10 字、去重、最多 5 个。
+
+  老存档里是单个 note 字符串（最长 40 字），迁移时截成第一个标签——
+  丢掉总比整条备注消失好，用户看到还能再分。
+*/
+const sanitizeTags = (raw, legacyNote) => {
+  const source = Array.isArray(raw) ? raw : typeof legacyNote === 'string' ? [legacyNote] : []
+  const out = []
+  for (const item of source) {
+    if (typeof item !== 'string') {
+      continue
+    }
+    const text = item.trim().slice(0, MAX_TAG_LEN)
+    if (!text || out.includes(text)) {
+      continue
+    }
+    out.push(text)
+    if (out.length >= MAX_TAGS) {
+      break
+    }
+  }
+  return out
+}
+
 const sanitizePoint = raw => {
   if (!isObj(raw)) {
     return null
@@ -81,8 +110,8 @@ const sanitizePoint = raw => {
 
   return {
     id,
-    // 备注：用户自己用来区分点位的标签，可空
-    note: typeof raw.note === 'string' ? raw.note.slice(0, 40) : '',
+    // 标签：用户自己用来区分点位；老存档的 note 字符串迁成单个标签
+    tags: sanitizeTags(raw.tags, raw.note),
     mapId: nonEmptyString(raw.mapId),
     cell: nonEmptyString(raw.cell),
     level,

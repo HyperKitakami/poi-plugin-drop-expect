@@ -30,7 +30,7 @@ export const nextPointId = () => `p-${Date.now()}-${seq++}`
  */
 export const createPoint = (patch = {}) => ({
   id: nextPointId(),
-  note: patch.note || '',
+  tags: Array.isArray(patch.tags) ? patch.tags.slice(0, 5) : [],
   mapId: patch.mapId ?? null,
   cell: patch.cell ?? null,
   level: patch.level ?? 0,
