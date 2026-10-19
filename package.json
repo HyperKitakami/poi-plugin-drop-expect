@@ -1,0 +1,37 @@
+{
+  "name": "poi-plugin-drop-expect",
+  "version": "0.1.0",
+  "description": "Drop probability and resource budget calculator for ship farming",
+  "main": "index.es",
+  "files": [
+    "calc/",
+    "redux/",
+    "services/",
+    "store/",
+    "views/",
+    "i18n/",
+    "index.es",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --import ./test/loader.mjs --test test/probability.test.es test/cost.test.es test/aggregate.test.es test/kcwiki.test.es test/wmfg.test.es test/reducer.test.es test/schema.test.es test/p-state.test.es test/i18n.test.es"
+  },
+  "keywords": [
+    "kancolle",
+    "poi",
+    "poi-plugin"
+  ],
+  "author": "HyperKitakami",
+  "license": "MIT",
+  "poiPlugin": {
+    "title": "Drop Expect",
+    "description": "掉落期望与资源预算计算",
+    "icon": "fa/calculator",
+    "priority": 50,
+    "apiVer": {
+      "12.0.1": "0.1.0"
+    }
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
