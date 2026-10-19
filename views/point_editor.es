@@ -326,32 +326,61 @@ const PointCard = ({
 
   return (
     <Card style={{ marginTop: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-        <Button
-          minimal
-          small
-          icon={open ? 'chevron-down' : 'chevron-right'}
-          aria-label={open ? t('Collapse', '折叠') : t('Expand', '展开')}
-          onClick={() => setOpen(value => !value)}
-        />
-        <b style={{ color: ACCENT_COLOR, fontSize: 13 }}>{pointTitle(point)}</b>
-        <Tag minimal>
-          {members.length} {t('ships', '艘')}
-        </Tag>
-        {/* 备注靠右、紧跟删除按钮：它是对整张卡的补充说明，不属于标题信息 */}
-        <InputGroup
-          value={point.note || ''}
-          placeholder={t('Note', '备注（便于区分）')}
-          style={{ width: 180, marginLeft: 'auto' }}
-          onChange={e => onChange({ note: e.target.value })}
-        />
-        <Button
-          minimal
-          intent="danger"
-          icon="trash"
-          onClick={onRemove}
-          aria-label={t('Delete point', '删除点位')}
-        />
+      {/* 表头分左右两块：左＝识别信息（可压缩），右＝备注+删除（不压缩）。
+          右块用 marginLeft:auto 顶到右端；不用 flexWrap，避免窄面板时
+          换行后两块都落到行首、看起来「挤在左边」。 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <Button
+            minimal
+            small
+            icon={open ? 'chevron-down' : 'chevron-right'}
+            aria-label={open ? t('Collapse', '折叠') : t('Expand', '展开')}
+            onClick={() => setOpen(value => !value)}
+          />
+          <b
+            style={{
+              color: ACCENT_COLOR,
+              fontSize: 13,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {pointTitle(point)}
+          </b>
+          <Tag minimal style={{ flexShrink: 0 }}>
+            {members.length} {t('ships', '艘')}
+          </Tag>
+        </div>
+
+        {/* 备注是对整张卡的补充说明，靠右紧挨删除按钮，不插在识别信息中间 */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 4,
+            marginLeft: 'auto',
+            flexShrink: 0,
+          }}
+        >
+          {/* 注意：Blueprint 的 InputGroup 只把 style 传给内部的 <input>，
+              不会传给外层 .bp6-input-group（实测 bp6 的实现如此）。
+              所以宽度写在这里是「输入框宽度」，位置必须由外层 div 控制。 */}
+          <InputGroup
+            value={point.note || ''}
+            placeholder={t('Note', '备注（便于区分）')}
+            style={{ width: 156 }}
+            onChange={e => onChange({ note: e.target.value })}
+          />
+          <Button
+            minimal
+            intent="danger"
+            icon="trash"
+            onClick={onRemove}
+            aria-label={t('Delete point', '删除点位')}
+          />
+        </div>
       </div>
 
       {open ? (
