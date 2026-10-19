@@ -182,7 +182,12 @@ const PointCard = ({
   estimateCost,
   onRemove,
 }) => {
-  const [open, setOpen] = useState(true)
+  /*
+    默认折叠：点位多了以后，全部展开会让这一页变成一堵墙。
+    例外是「草稿点位」（海域或目标点还没选）——它是刚点「添加点位」建出来的，
+    收起后用户会以为什么都没发生，所以让它保持展开，选完位置后自然归入折叠。
+  */
+  const [open, setOpen] = useState(() => !point.mapId || !point.cell)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [query, setQuery] = useState('')
 

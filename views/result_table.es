@@ -91,7 +91,8 @@ const ReasonText = ({ row }) =>
 
 const ShipGroup = ({ group, masterShips }) => {
   const best = group.rows[0]
-  const [open, setOpen] = useState(true)
+  // 默认折叠：一艘船一个点位对比表，目标一多整页会很长
+  const [open, setOpen] = useState(false)
 
   return (
     <Card style={{ marginTop: 8 }}>
