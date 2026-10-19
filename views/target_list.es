@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { Button, Callout, InputGroup, Tag } from '@blueprintjs/core'
 
-import { getShipOptions, resolveShipName, shipMatchesQuery } from './selectors'
+import { findHiddenShipMatch, getShipOptions, resolveShipName, shipMatchesQuery } from './selectors'
 import { t } from './i18n'
 
 const MAX_RESULTS = 12
@@ -22,6 +22,18 @@ const TargetList = ({ targets, masterShips, onAdd, onRemove }) => {
     }
     return options.filter(ship => !picked.has(ship.id) && shipMatchesQuery(query, ship)).slice(0, MAX_RESULTS)
   }, [options, picked, query])
+
+  // 查不到时，先确认是不是「查到了但被过滤掉」（改装形态 / 敌舰），给出具体原因
+  const hidden = useMemo(
+    () => (query.trim() && results.length === 0 ? findHiddenShipMatch(masterShips, query) : null),
+    [masterShips, query, results.length],
+  )
+  const hiddenHint =
+    hidden && hidden.baseId && hidden.baseId !== hidden.shipId
+      ? t('Remodeled hint', '「{0}」为改装形态，掉落统计按「{1}」记录')
+          .replace('{0}', hidden.name)
+          .replace('{1}', hidden.baseName)
+      : null
 
   return (
     <div>
@@ -70,12 +82,36 @@ const TargetList = ({ targets, masterShips, onAdd, onRemove }) => {
                   <span className="bp6-text-muted" style={{ marginLeft: 4 }}>
                     {ship.yomi}
                   </span>
+                  {/* 把 ID 显示出来：一来能核对搜索结果，二来让「可以按 ID 搜」这件事被看见 */}
+                  <span className="bp6-text-muted" style={{ marginLeft: 4, fontSize: 11 }}>
+                    #{ship.id}
+                  </span>
                 </Button>
               ))}
             </div>
           ) : query.trim() ? (
-            <div className="bp6-text-muted" style={{ fontSize: 12, marginTop: 6 }}>
-              {t('No match', '没有匹配的舰船。')}
+            <div style={{ marginTop: 6 }}>
+              <div className="bp6-text-muted" style={{ fontSize: 12 }}>
+                {t('No match', '没有匹配的舰船。')}
+              </div>
+              {hiddenHint ? (
+                <div style={{ marginTop: 4 }}>
+                  <div className="bp6-text-muted" style={{ fontSize: 12 }}>
+                    {hiddenHint}
+                  </div>
+                  <Button
+                    small
+                    intent="primary"
+                    style={{ marginTop: 4 }}
+                    onClick={() => {
+                      onAdd(hidden.baseId)
+                      setQuery('')
+                    }}
+                  >
+                    {t('Add base ship', '改为加入')} {hidden.baseName}
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </>

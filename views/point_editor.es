@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button, Callout, Card, Divider, HTMLSelect, InputGroup, Tag } from '@blueprintjs/core'
 
-import { getMapOptions, getShipOptions, getSpotOptions, isEventArea, resolveShipName, shipMatchesQuery } from './selectors'
+import { findHiddenShipMatch, getMapOptions, getShipOptions, getSpotOptions, isEventArea, resolveShipName, shipMatchesQuery } from './selectors'
 import { NumberInput } from './number_input'
 import { ACCENT_COLOR } from './theme'
 import { t } from './i18n'
@@ -237,6 +237,18 @@ const PointCard = ({
       .filter(ship => !memberIds.has(ship.id) && shipMatchesQuery(query, ship))
       .slice(0, 8)
   }, [query, shipOptions, memberIds])
+
+  // 查不到时的具体原因：多半是查到了改装形态（掉落表按未改装舰记录）
+  const hiddenMatch = useMemo(
+    () => (query.trim() && searchResults.length === 0 ? findHiddenShipMatch(masterShips, query) : null),
+    [masterShips, query, searchResults.length],
+  )
+  const hiddenHint =
+    hiddenMatch && hiddenMatch.baseId && hiddenMatch.baseId !== hiddenMatch.shipId
+      ? t('Remodeled hint', '「{0}」为改装形态，掉落统计按「{1}」记录')
+          .replace('{0}', hiddenMatch.name)
+          .replace('{1}', hiddenMatch.baseName)
+      : null
 
   const cost = point.cost || {}
 
@@ -539,7 +551,7 @@ const PointCard = ({
               <InputGroup
                 leftIcon="search"
                 value={query}
-                placeholder={t('Search to add', '搜索舰名加入（同时加入全局清单）')}
+                placeholder={t('Search to add', '搜索舰名、假名或 ID 加入（同时加入全局清单）')}
                 onChange={e => setQuery(e.target.value)}
               />
               {searchResults.length > 0 ? (
@@ -558,12 +570,35 @@ const PointCard = ({
                       <span className="bp6-text-muted" style={{ marginLeft: 4 }}>
                         {ship.yomi}
                       </span>
+                      <span className="bp6-text-muted" style={{ marginLeft: 4, fontSize: 11 }}>
+                        #{ship.id}
+                      </span>
                     </Button>
                   ))}
                 </div>
               ) : query.trim() ? (
-                <div className="bp6-text-muted" style={{ fontSize: 11, marginTop: 6 }}>
-                  {t('No match', '没有匹配的舰船。')}
+                <div style={{ marginTop: 6 }}>
+                  <div className="bp6-text-muted" style={{ fontSize: 11 }}>
+                    {t('No match', '没有匹配的舰船。')}
+                  </div>
+                  {hiddenHint ? (
+                    <div style={{ marginTop: 4 }}>
+                      <div className="bp6-text-muted" style={{ fontSize: 11 }}>
+                        {hiddenHint}
+                      </div>
+                      <Button
+                        small
+                        intent="primary"
+                        style={{ marginTop: 4 }}
+                        onClick={() => {
+                          onAddShip(hiddenMatch.baseId)
+                          setQuery('')
+                        }}
+                      >
+                        {t('Add base ship', '改为加入')} {hiddenMatch.baseName}
+                      </Button>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
             </div>

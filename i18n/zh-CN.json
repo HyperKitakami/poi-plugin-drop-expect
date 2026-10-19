@@ -85,8 +85,10 @@
   "No target in point": "还没有目标舰。点「添加目标舰」从全局清单挑选，或直接在下方搜索。",
   "Remove": "移除",
   "From global list": "全局清单中尚未加入本点位",
-  "Search to add": "搜索舰名加入（同时加入全局清单）",
+  "Search to add": "搜索舰名、假名或 ID 加入（同时加入全局清单）",
   "Candidate ships": "样本中的其他舰船（点击加入，会同时进入全局清单与本点位）",
   "Last stats": "上次统计",
-  "node unset": "未设置目标点"
+  "node unset": "未设置目标点",
+  "Remodeled hint": "「{0}」为改装形态，掉落统计按「{1}」记录",
+  "Add base ship": "改为加入"
 }
