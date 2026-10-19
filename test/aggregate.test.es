@@ -7,6 +7,7 @@ import {
   buildShipRows,
   isPointUsable,
   pointLabel,
+  pointShipIds,
   rateOf,
 } from '../calc/aggregate.es'
 
@@ -209,4 +210,60 @@ test('空输入不炸', () => {
   assert.deepEqual(report.groups, [])
   const report2 = buildReport({ points: [], targets: TARGETS, mode: 'all', probTarget: 0.9, have: HAVE })
   assert.deepEqual(report2.rows, [])
+})
+
+test('点位成员：取自 rates 的键，排序且丢弃非法 ID', () => {
+  assert.deepEqual(pointShipIds(POINTS[0]), [71, 72])
+  assert.deepEqual(
+    pointShipIds({ rates: { '72': { rate: 0.1 }, '71': { rate: 0.2 }, x: { rate: 0.3 }, '0': {} } }),
+    [71, 72],
+  )
+  assert.deepEqual(pointShipIds({}), [])
+  assert.deepEqual(pointShipIds(null), [])
+})
+
+test('集合口径：成员取自点位，不看全局清单', () => {
+  // 全局清单多挂了 73，它不在任何点位的 rates 里
+  const targets = [{ shipId: 71 }, { shipId: 72 }, { shipId: 73 }]
+  const report = buildReport({ points: POINTS, targets, mode: 'all', probTarget: 0.9, have: HAVE })
+
+  const p1 = report.rows.find(row => row.pointId === 'p1')
+  assert.deepEqual(p1.qs, [0.03, 0.02], 'p1 收了 71/72，与全局清单一致')
+  assert.equal(p1.n, 126)
+
+  const p2 = report.rows.find(row => row.pointId === 'p2')
+  assert.deepEqual(p2.qs, [0.05], 'p2 只收了 71，就该按一艘算')
+  assert.equal(p2.reason, null, '不再因为「没收录 72」被判成集不齐')
+  assert.equal(p2.n, 45)
+})
+
+test('集合口径：全局清单里的无关舰不影响结果', () => {
+  const withExtra = buildReport({
+    points: POINTS,
+    targets: [{ shipId: 71 }, { shipId: 72 }, { shipId: 73 }],
+    mode: 'anyOf',
+    probTarget: 0.9,
+    have: HAVE,
+  })
+  const plain = buildReport({
+    points: POINTS,
+    targets: [{ shipId: 71 }, { shipId: 72 }],
+    mode: 'anyOf',
+    probTarget: 0.9,
+    have: HAVE,
+  })
+  assert.deepEqual(withExtra.rows.map(row => row.n), plain.rows.map(row => row.n))
+})
+
+test('集合口径：点位成员没填率才算集不齐', () => {
+  const point = { ...POINTS[0], rates: { 71: { rate: 0.03 }, 72: { rate: null, source: 'unset' } } }
+  const report = buildReport({
+    points: [point],
+    targets: TARGETS,
+    mode: 'all',
+    probTarget: 0.9,
+    have: HAVE,
+  })
+  assert.equal(report.rows[0].reason, 'incomplete-set')
+  assert.deepEqual(report.rows[0].missing, [72])
 })

@@ -4,7 +4,7 @@
   纯粹的「点位 × 目标 → 次数 / 消耗」推导，UI 只负责画。
   mode:
     single  单舰达成：每艘目标舰一组，组内是各点位的对比行（D8）
-    anyOf   集合「至少一艘」：以点位为单位，一条集合结论
+    anyOf   集合「至少一艘」：以点位为单位，集合 = 该点位已添加的目标舰
     all     集合「全部收集」：同上，用精确 DP
 */
 
@@ -27,6 +27,19 @@ export const rateOf = (point, shipId) => {
   const entry = point && point.rates && point.rates[shipId]
   return entry && typeof entry.rate === 'number' && Number.isFinite(entry.rate) ? entry.rate : null
 }
+
+/*
+  点位自己的目标舰 = point.rates 的键。
+
+  集合口径（至少一艘 / 全部收集）必须按这个来算，而不是全局清单：
+  一个点位只掉其中两艘时，「这三艘里出一艘」这句对它是没意义的，
+  「全部收集」更是永远不成立。全局清单只是候选池。
+*/
+export const pointShipIds = point =>
+  Object.keys((point && point.rates) || {})
+    .map(Number)
+    .filter(id => Number.isInteger(id) && id > 0)
+    .sort((a, b) => a - b)
 
 /** 没选海域/格子的点位是草稿，不参与计算 */
 export const isPointUsable = point => !!(point && point.mapId && point.cell)
@@ -144,6 +157,7 @@ export const buildSetRow = ({ point, shipIds, mode, probTarget, have, index = 0 
     reachRate: point.reachRate,
     rate: null,
     q: null,
+    shipIds,
     qs,
     missing,
     expected: null,
@@ -190,8 +204,8 @@ export const buildSetRow = ({ point, shipIds, mode, probTarget, have, index = 0 
 /**
  * 生成整个报告。
  * 返回结构：
- *   single → { mode, groups: [{ shipId, rows }] }
- *   其他   → { mode, rows }
+ *   single → { mode, groups: [{ shipId, rows }] }   targets 决定有哪些分组
+ *   其他   → { mode, rows }                          集合成员取自各点位的 rates，targets 不参与
  */
 export const buildReport = ({ points, targets, mode, probTarget, have, sortKey = 'n' }) => {
   const shipIds = (targets || []).map(t => t.shipId)
@@ -208,8 +222,9 @@ export const buildReport = ({ points, targets, mode, probTarget, have, sortKey =
     return { mode, groups, rows: [] }
   }
 
+  // 集合口径只看「这个点位自己收的目标舰」，全局清单不参与（否则会有永远集不齐的点）
   const rows = usable.map((point, index) =>
-    buildSetRow({ point, shipIds, mode, probTarget, have, index }),
+    buildSetRow({ point, shipIds: pointShipIds(point), mode, probTarget, have, index }),
   )
   return { mode, groups: [], rows: sortRows(rows, sortKey) }
 }

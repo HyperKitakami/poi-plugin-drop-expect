@@ -84,7 +84,10 @@ const ReverseCell = ({ reverse }) => {
 
 const ReasonText = ({ row }) =>
   row.reason === 'incomplete-set'
-    ? t('Incomplete set', `有 ${row.missing.length} 艘目标舰未填写掉落率，无法集齐`)
+    ? t('Incomplete set', '该点位有 {0} 艘目标舰未填写掉落率，无法集齐').replace(
+        '{0}',
+        String(row.missing.length),
+      )
     : row.reason === 'too-many-targets'
       ? t('Too many targets', '目标超过 12 艘，无法精确计算')
       : t('No rate', '该点位没有填写掉落率')
@@ -166,7 +169,7 @@ const ShipGroup = ({ group, masterShips }) => {
   )
 }
 
-const SetTable = ({ rows }) => (
+const SetTable = ({ rows, masterShips }) => (
   <Card style={{ marginTop: 8 }}>
     <table className="bp6-html-table bp6-html-table-condensed" style={{ width: '100%' }}>
       <thead>
@@ -193,6 +196,15 @@ const SetTable = ({ rows }) => (
                 {row.rank !== 'SAB' ? (
                   <Tag minimal style={{ marginLeft: 4 }}>
                     {row.rank}
+                  </Tag>
+                ) : null}
+                {row.shipIds && row.shipIds.length > 0 ? (
+                  <Tag
+                    minimal
+                    style={{ marginLeft: 4 }}
+                    title={row.shipIds.map(id => resolveShipName(masterShips, id)).join(' / ')}
+                  >
+                    {row.shipIds.length} {t('ships', '艘')}
                   </Tag>
                 ) : null}
                 {row.missing && row.missing.length > 0 ? (
@@ -242,7 +254,7 @@ const ResultTable = ({ report, masterShips }) => {
     )
   }
 
-  return <SetTable rows={report.rows} />
+  return <SetTable rows={report.rows} masterShips={masterShips} />
 }
 
 export { ResultTable }
