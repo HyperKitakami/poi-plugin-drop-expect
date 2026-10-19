@@ -57,6 +57,31 @@ test('掉落率：只留合法条目，来源缺省为 manual', () => {
   assert.equal(rates[71].timeRange.length, 2)
 })
 
+test('点位备注：保留，过长截断', () => {
+  const state = sanitizePState({
+    points: [{ id: 'p', mapId: '2-2', cell: 'B', note: 'x'.repeat(80) }, { id: 'q', mapId: '1-1', cell: 'A' }],
+  })
+  assert.equal(state.points[0].note.length, 40)
+  assert.equal(state.points[1].note, '')
+})
+
+test('掉落率：允许「已加入但未填率」，非法值仍丢弃', () => {
+  const state = sanitizePState({
+    points: [
+      {
+        id: 'p',
+        mapId: '2-2',
+        cell: 'B',
+        rates: { 71: { rate: null, source: 'unset' }, 72: { rate: 'x' }, 73: { rate: 0.01 } },
+      },
+    ],
+  })
+  const rates = state.points[0].rates
+  assert.deepEqual(Object.keys(rates).sort(), ['71', '73'])
+  assert.equal(rates[71].rate, null)
+  assert.equal(rates[71].source, 'unset')
+})
+
 test('目标舰：去重、丢弃非法 ID', () => {
   const state = sanitizePState({
     targets: [{ shipId: 71 }, { shipId: 71 }, { shipId: 'x' }, { shipId: 0 }, { shipId: 530, note: 'hi' }],

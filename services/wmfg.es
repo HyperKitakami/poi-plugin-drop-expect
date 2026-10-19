@@ -19,6 +19,8 @@
 import { existsSync, readFileSync, statSync } from 'fs'
 import { join } from 'path'
 
+import { COST_KEYS } from '../calc/cost'
+
 const DIR = 'wheres-my-fuel-gone'
 const FILE = 'sortie_records.json'
 
@@ -53,7 +55,7 @@ export const normalizeRecord = raw => {
     return null
   }
 
-  const cost = { supplyFuel: 0, ammo: 0, bauxite: 0, dockFuel: 0, dockSteel: 0, bucket: 0 }
+  const cost = { supplyFuel: 0, ammo: 0, supplySteel: 0, bauxite: 0, dockFuel: 0, dockSteel: 0, bucket: 0 }
   const fleet = Array.isArray(raw.fleet) ? raw.fleet : []
   for (const ship of fleet) {
     const consumption = ship && Array.isArray(ship.consumption) ? ship.consumption : null
@@ -62,8 +64,9 @@ export const normalizeRecord = raw => {
       cost.ammo += num(consumption[1])
       cost.bauxite += num(consumption[2])
       cost.dockFuel += num(consumption[3])
-      // 入渠钢 + 喷式强袭钢，两者都是钢
-      cost.dockSteel += num(consumption[4]) + num(consumption[5])
+      cost.dockSteel += num(consumption[4])
+      // 喷式强袭消耗的是补给钢，和修理钢分开记
+      cost.supplySteel += num(consumption[5])
     }
     if (ship && ship.bucket === true) {
       cost.bucket += 1
@@ -95,7 +98,7 @@ export const normalizeRecord = raw => {
   return { time, mapId, cost, extra }
 }
 
-const COST_KEYS = ['supplyFuel', 'ammo', 'bauxite', 'dockFuel', 'dockSteel', 'bucket']
+// 支援/陆航单独累计；消耗字段以 calc/cost 为准，避免两处口径漂移
 const EXTRA_KEYS = ['fuel', 'ammo', 'steel', 'bauxite']
 
 /**

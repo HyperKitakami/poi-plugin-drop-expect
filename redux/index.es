@@ -15,6 +15,7 @@ import {
   POINT_REMOVE,
   POINT_UPDATE,
   RATE_CLEAR,
+  RATE_LINK,
   RATE_SET,
   TARGET_ADD,
   TARGET_REMOVE,
@@ -56,7 +57,7 @@ const normalize = state => ({
 const isShaped = state =>
   !!state && typeof state === 'object' && Array.isArray(state.points) && Array.isArray(state.targets)
 
-const PATCHABLE = ['mapId', 'cell', 'level', 'rank', 'reachRate', 'cost', 'rates']
+const PATCHABLE = ['note', 'mapId', 'cell', 'level', 'rank', 'reachRate', 'cost', 'rates']
 
 const patchPoint = (point, patch) => {
   const next = { ...point }
@@ -68,8 +69,15 @@ const patchPoint = (point, patch) => {
   return next
 }
 
-/** 手填概率：0~1，超界截断；非法值忽略而不是写 0，避免把「未设置」变成 0% */
+/** 手填概率：0~1，超界截断；非法值忽略。rate 传 null 表示「加入了这个点位但还没填」 */
 const applyRate = (point, shipId, rate, meta) => {
+  if (rate === null || rate === undefined) {
+    const prev = (point.rates && point.rates[shipId]) || {}
+    return {
+      ...point,
+      rates: { ...point.rates, [shipId]: { ...prev, rate: null, source: 'unset' } },
+    }
+  }
   if (typeof rate !== 'number' || !Number.isFinite(rate)) {
     return point
   }
@@ -167,6 +175,25 @@ export function reducer(state = initState, action, rootState) {
       return {
         ...current,
         points: current.points.map(p => (p.id === pointId ? applyRate(p, shipId, rate, meta) : p)),
+      }
+    }
+
+    case RATE_LINK: {
+      const { pointId, shipId } = action
+      if (!Number.isInteger(shipId) || shipId <= 0) {
+        return current
+      }
+      if (!current.points.some(p => p.id === pointId)) {
+        return current
+      }
+      return {
+        ...current,
+        points: current.points.map(p => {
+          if (p.id !== pointId || (p.rates && p.rates[shipId])) {
+            return p
+          }
+          return { ...p, rates: { ...(p.rates || {}), [shipId]: { rate: null, source: 'unset' } } }
+        }),
       }
     }
 

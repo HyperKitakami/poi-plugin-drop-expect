@@ -8,6 +8,7 @@ import {
   clearRate,
   pStateReady,
   removePoint,
+  linkRate,
   removeTarget,
   setHave,
   setRate,
@@ -99,6 +100,32 @@ test('掉落率：写入、来源、超界截断、非法值忽略、清除', ()
 
   state = reducer(state, clearRate(pointId, 71))
   assert.equal(state.points[0].rates[71], undefined)
+})
+
+test('点位备注可以改，且不会被其他 patch 冲掉', () => {
+  let state = reducer(base(), addPoint({ mapId: '2-2', cell: 'B' }))
+  const id = state.points[0].id
+  state = reducer(state, updatePoint(id, { note: 'E1 捞船' }))
+  assert.equal(state.points[0].note, 'E1 捞船')
+  state = reducer(state, updatePoint(id, { cell: 'K' }))
+  assert.equal(state.points[0].note, 'E1 捞船')
+})
+
+test('加入占位：有键但没填率，不覆盖已有条目', () => {
+  let state = reducer(base(), addPoint({ mapId: '2-2', cell: 'B' }))
+  const id = state.points[0].id
+
+  state = reducer(state, linkRate(id, 71))
+  assert.deepEqual(state.points[0].rates[71], { rate: null, source: 'unset' })
+
+  state = reducer(state, setRate(id, 71, 0.02))
+  state = reducer(state, linkRate(id, 71))
+  assert.equal(state.points[0].rates[71].rate, 0.02, '已有条目不该被占位覆盖')
+
+  // 清空输入 → 回到占位态，而不是变成 0%
+  state = reducer(state, setRate(id, 71, null))
+  assert.equal(state.points[0].rates[71].rate, null)
+  assert.equal(state.points[0].rates[71].source, 'unset')
 })
 
 test('现有资源：手改会置 manual', () => {

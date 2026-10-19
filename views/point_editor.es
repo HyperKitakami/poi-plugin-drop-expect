@@ -1,11 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Button, Callout, Divider, HTMLSelect, InputGroup, Tag } from '@blueprintjs/core'
+import { Button, Callout, Card, Divider, HTMLSelect, InputGroup, Tag } from '@blueprintjs/core'
 
-import { getMapOptions, getSpotOptions, isEventArea, resolveShipName } from './selectors'
+import { getMapOptions, getShipOptions, getSpotOptions, isEventArea, resolveShipName, shipMatchesQuery } from './selectors'
 import { NumberInput } from './number_input'
 import { t } from './i18n'
 
+/*
+  点位卡片。
+
+  一个点位 = 一张卡：表头（备注/折叠/删除）+ 折叠区（海域与目标点、该点位的目标舰、
+  掉落率抓取、单次消耗、消耗估算）。
+
+  「目标舰」的归属靠 point.rates 的键决定：有键 = 已加入本点位（rate 可能是 null，
+  表示加入了但还没填率）。全局 targets 只是候选池，两处通过 linkRate 打通。
+*/
+
 const RANKS = ['SAB', 'SA', 'S', 'A', 'B']
+
 const LEVELS = [
   { value: 0, label: '通常' },
   { value: 1, label: '丁' },
@@ -14,63 +25,30 @@ const LEVELS = [
   { value: 4, label: '甲' },
 ]
 
-const COST_FIELDS = [
-  { key: 'supplyFuel', label: '油（补给）' },
-  { key: 'ammo', label: '弹' },
-  { key: 'bauxite', label: '铝' },
-  { key: 'dockFuel', label: '油（入渠）' },
-  { key: 'dockSteel', label: '钢（入渠）' },
-  { key: 'bucket', label: '桶' },
+// 补给 = 出击当下扣的；入渠 = 修船折算的，桶算在入渠行
+const COST_ROWS = [
+  {
+    id: 'supply',
+    title: '补给',
+    hint: '出击时直接扣除',
+    keys: [
+      ['supplyFuel', '油'],
+      ['ammo', '弹'],
+      ['supplySteel', '钢'],
+      ['bauxite', '铝'],
+    ],
+  },
+  {
+    id: 'dock',
+    title: '入渠',
+    hint: '按入渠价折算',
+    keys: [
+      ['dockFuel', '油'],
+      ['dockSteel', '钢'],
+      ['bucket', '桶'],
+    ],
+  },
 ]
-
-// 概率存 0~1，界面按百分比显示；保留 4 位小数，0.01191 → 1.191
-const toPercent = rate => (typeof rate === 'number' ? Number((rate * 100).toFixed(4)) : null)
-
-const fmtWindow = timeRange =>
-  Array.isArray(timeRange) && timeRange.length === 2
-    ? `${String(timeRange[0]).slice(0, 10)} ~ ${String(timeRange[1]).slice(0, 10)}`
-    : ''
-
-/** 抓取结果 → 一句人话，区分「更新了」「被手填挡住」「样本里没有」 */
-const describeFetch = summary => {
-  const window = fmtWindow(summary.timeRange)
-  if (summary.applied === 0) {
-    if (summary.missingCount > 0) {
-      return {
-        intent: 'warning',
-        text: `样本 ${summary.totalCount} 条，但没有匹配到你的目标舰（${summary.unmatchedCount} 个舰名未能对上舰娘）。可手填，或确认舰名是否为改装后形态。`,
-      }
-    }
-    return { intent: 'warning', text: '没有可写入的数据。' }
-  }
-  let text = `已更新 ${summary.applied} 艘（样本 ${summary.totalCount}${window ? `，窗口 ${window}` : ''}）`
-  if (summary.skipped > 0) {
-    text += `；${summary.skipped} 艘手填值已保留`
-  }
-  if (summary.missingCount > 0) {
-    text += `；${summary.missingCount} 艘未在样本中出现`
-  }
-  return { intent: 'success', text }
-}
-
-const describeError = error => {
-  switch (error && error.code) {
-    case 'NOT_FOUND':
-      return '该海域/难度暂无统计（404）。可能是普通图选了难度，或活动图未收录。'
-    case 'EMPTY':
-      return '该点位在统计期内没有样本。'
-    case 'NETWORK':
-      return `网络请求失败：${(error && error.message) || '未知原因'}`
-    case 'PARSE':
-      return '返回内容解析失败，可能是接口结构变了。'
-    case 'BAD_POINT':
-      return '点位信息不完整：需要海域、格子和合法评价。'
-    default:
-      return (error && error.message) || '抓取失败'
-  }
-}
-
-/* ---- 消耗估算（来自 WMFG 的历史出击记录） ---- */
 
 const RANGES = [
   { key: '1', label: '最近 1 天', days: 1 },
@@ -84,9 +62,29 @@ const rangeFrom = key => {
   return range && range.days ? Date.now() - range.days * 86400000 : null
 }
 
+const rangeLabel = key => {
+  const range = RANGES.find(item => item.key === key)
+  return range ? range.label : key
+}
+
 const fmtDay = ts => (typeof ts === 'number' ? new Date(ts).toLocaleDateString('zh-CN') : '—')
+const fmtDateTime = ts =>
+  typeof ts === 'number'
+    ? `${new Date(ts).toLocaleDateString('zh-CN')} ${new Date(ts).toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })}`
+    : '—'
 
 const round1 = v => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v * 10) / 10 : 0)
+
+const toPercent = rate => (typeof rate === 'number' ? Number((rate * 100).toFixed(4)) : null)
+
+// 概率存 0~1，界面按百分比显示；保留 4 位小数，0.01191 → 1.191
+const fmtWindow = timeRange =>
+  Array.isArray(timeRange) && timeRange.length === 2
+    ? `${String(timeRange[0]).slice(0, 10)} ~ ${String(timeRange[1]).slice(0, 10)}`
+    : ''
 
 const ESTIMATE_REASONS = {
   NO_ADMIRAL: '还没读到提督 ID，请先在 poi 里进入游戏。',
@@ -95,24 +93,77 @@ const ESTIMATE_REASONS = {
   BAD: '记录文件解析失败，可能正在被写入，稍后重试。',
 }
 
-// 样本太少时均值波动很大（实测 2-2 全部 410 次均值 38.8，最近 30 天 4 次均值 75.5）
 const FEW_SAMPLES = 10
 
-const Field = ({ label, children, hint }) => (
-  <div style={{ minWidth: 120 }}>
-    <div className="bp6-text-muted" style={{ fontSize: 11, marginBottom: 2 }}>
+const describeError = error => {
+  switch (error && error.code) {
+    case 'NOT_FOUND':
+      return '该海域/难度暂无统计（404）。可能是普通图选了难度，或活动图未收录。'
+    case 'EMPTY':
+      return '该点位在统计期内没有样本。'
+    case 'NETWORK':
+      return `网络请求失败：${(error && error.message) || '未知原因'}`
+    case 'PARSE':
+      return '返回内容解析失败，可能是接口结构变了。'
+    case 'BAD_POINT':
+      return '点位信息不完整：需要海域、目标点和合法评价。'
+    default:
+      return (error && error.message) || '抓取失败'
+  }
+}
+
+const describeFetch = summary => {
+  const window = fmtWindow(summary.timeRange)
+  if (summary.applied === 0) {
+    if (summary.candidateCount > 0) {
+      return {
+        intent: 'primary',
+        text: `已取回 ${summary.totalCount} 条样本、${summary.candidateCount} 艘可选舰船，见下方列表。`,
+      }
+    }
+    if (summary.missingCount > 0) {
+      return {
+        intent: 'warning',
+        text: `样本 ${summary.totalCount} 条，但没有匹配到你的目标舰（${summary.unmatchedCount} 个舰名未能对上舰娘）。`,
+      }
+    }
+    return { intent: 'warning', text: '没有可写入的数据。' }
+  }
+  let text = `已更新 ${summary.applied} 艘（样本 ${summary.totalCount}${window ? `，窗口 ${window}` : ''}）`
+  if (summary.skipped > 0) {
+    text += `；${summary.skipped} 艘手填值已保留`
+  }
+  if (summary.candidateCount > 0) {
+    text += `；另有 ${summary.candidateCount} 艘可在下方手选加入`
+  }
+  return { intent: 'success', text }
+}
+
+/*
+  固定三行（标签 / 控件 / 说明）的字段容器。
+
+  这样同一行里有没有 hint 都不会让控件高低不齐——
+  之前「目标点」比「海域」低一截，就是因为海域多了说明行。
+*/
+const Field = ({ label, hint, children }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', minWidth: 96 }}>
+    <div className="bp6-text-muted" style={{ fontSize: 11, lineHeight: '16px', height: 16 }}>
       {label}
     </div>
     {children}
-    {hint ? (
-      <div className="bp6-text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-        {hint}
-      </div>
-    ) : null}
+    <div className="bp6-text-muted" style={{ fontSize: 11, lineHeight: '16px', height: 16 }}>
+      {hint || ''}
+    </div>
   </div>
 )
 
-const PointEditor = ({
+const pointTitle = point => {
+  const map = point.mapId || t('map unset', '未设置海域')
+  const cell = point.cell || t('node unset', '未设置目标点')
+  return `${map} · ${cell}`
+}
+
+const PointCard = ({
   point,
   targets,
   masterShips,
@@ -120,21 +171,23 @@ const PointEditor = ({
   fcdMap,
   onChange,
   onRate,
+  onRemoveMember,
+  onLinkTarget,
+  onAddShip,
+  onAddCandidate,
   onFetch,
   estimateCost,
   onRemove,
 }) => {
-  const event = isEventArea(mapareas, point.mapId)
-  const mapOptions = useMemo(() => getMapOptions(fcdMap), [fcdMap])
-  const spotOptions = useMemo(() => getSpotOptions(fcdMap, point.mapId), [fcdMap, point.mapId])
-  const mapListId = `de-maps-${point.id}`
-  const spotListId = `de-spots-${point.id}`
-  const estListId = `de-est-maps-${point.id}`
+  const [open, setOpen] = useState(true)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [query, setQuery] = useState('')
+
   const [fetching, setFetching] = useState(false)
   const [fetchStatus, setFetchStatus] = useState(null)
+  const [candidates, setCandidates] = useState([])
 
   const [estMapId, setEstMapId] = useState(point.mapId || '')
-  // 默认最近 7 天：全部太容易被旧阵容的数据拖偏
   const [estRange, setEstRange] = useState('7')
   const [estimating, setEstimating] = useState(false)
   const [estimate, setEstimate] = useState(null)
@@ -144,6 +197,72 @@ const PointEditor = ({
     setEstMapId(point.mapId || '')
   }, [point.mapId])
 
+  const event = isEventArea(mapareas, point.mapId)
+  const mapOptions = useMemo(() => getMapOptions(fcdMap), [fcdMap])
+  const spotOptions = useMemo(() => getSpotOptions(fcdMap, point.mapId), [fcdMap, point.mapId])
+  const shipOptions = useMemo(() => getShipOptions(masterShips), [masterShips])
+
+  const mapListId = `de-maps-${point.id}`
+  const spotListId = `de-spots-${point.id}`
+  const estListId = `de-est-maps-${point.id}`
+
+  // 已加入本点位的舰船（rate 为 null 表示占位、还没填率）
+  const members = useMemo(() => {
+    const raw = point.rates || {}
+    return Object.entries(raw)
+      .map(([key, entry]) => ({ shipId: Number(key), entry }))
+      .filter(item => Number.isInteger(item.shipId) && item.shipId > 0)
+      .sort((a, b) => {
+        const av = typeof a.entry.rate === 'number' ? a.entry.rate : -1
+        const bv = typeof b.entry.rate === 'number' ? b.entry.rate : -1
+        return bv - av || a.shipId - b.shipId
+      })
+  }, [point.rates])
+
+  const memberIds = useMemo(() => new Set(members.map(item => item.shipId)), [members])
+
+  const availableGlobals = useMemo(
+    () => targets.filter(item => !memberIds.has(item.shipId)),
+    [targets, memberIds],
+  )
+
+  const searchResults = useMemo(() => {
+    if (!query.trim()) {
+      return []
+    }
+    return shipOptions
+      .filter(ship => !memberIds.has(ship.id) && shipMatchesQuery(query, ship))
+      .slice(0, 8)
+  }, [query, shipOptions, memberIds])
+
+  const cost = point.cost || {}
+
+  const handleFetch = async () => {
+    if (fetching || !onFetch) {
+      return
+    }
+    const manualCount = members.filter(item => item.entry.source === 'manual').length
+    const overwriteManual =
+      manualCount > 0
+        ? window.confirm(
+            `该点位有 ${manualCount} 艘是手填的掉落率。\n\n确定 = 用抓取值覆盖\n取消 = 保留手填值，只补未填的`,
+          )
+        : false
+
+    setFetching(true)
+    setFetchStatus(null)
+    setCandidates([])
+    try {
+      const summary = await onFetch(point, { overwriteManual })
+      setFetchStatus(describeFetch(summary))
+      setCandidates((summary.candidates || []).slice(0, 40))
+    } catch (error) {
+      setFetchStatus({ intent: 'danger', text: describeError(error) })
+    } finally {
+      setFetching(false)
+    }
+  }
+
   const runEstimate = async () => {
     if (estimating || !estimateCost || !estMapId.trim()) {
       return
@@ -152,7 +271,7 @@ const PointEditor = ({
     setEstimate(null)
     try {
       const result = await estimateCost({ mapId: estMapId.trim(), from: rangeFrom(estRange) })
-      setEstimate(result)
+      setEstimate({ ...result, computedAt: Date.now(), rangeKey: estRange })
     } catch (error) {
       setEstimate({ ok: false, reason: 'ERROR', message: error && error.message })
     } finally {
@@ -167,8 +286,10 @@ const PointEditor = ({
     const avg = estimate.avg
     onChange({
       cost: {
+        ...cost,
         supplyFuel: round1(avg.supplyFuel),
         ammo: round1(avg.ammo),
+        supplySteel: round1(avg.supplySteel || 0),
         bauxite: round1(avg.bauxite),
         dockFuel: round1(avg.dockFuel),
         dockSteel: round1(avg.dockSteel),
@@ -177,308 +298,422 @@ const PointEditor = ({
     })
   }
 
-  const handleFetch = async () => {
-    if (fetching || !onFetch) {
-      return
+  const sourceTag = entry => {
+    if (entry.source === 'kcwiki') {
+      return (
+        <span>
+          <Tag minimal>kcwiki</Tag>
+          {typeof entry.sampleSize === 'number' ? (
+            <span className="bp6-text-muted" style={{ fontSize: 11, marginLeft: 6 }}>
+              n={entry.sampleSize}
+            </span>
+          ) : null}
+        </span>
+      )
     }
-    // 手填值优先（D6）：有手填就先问，取消则保留
-    const manualCount = targets.filter(
-      target => point.rates && point.rates[target.shipId] && point.rates[target.shipId].source === 'manual',
-    ).length
-    const overwriteManual =
-      manualCount > 0
-        ? window.confirm(
-            `该点位有 ${manualCount} 艘是手填的掉落率。\n\n确定 = 用抓取值覆盖\n取消 = 保留手填值，只补未填的`,
-          )
-        : false
-
-    setFetching(true)
-    setFetchStatus(null)
-    try {
-      const summary = await onFetch(point, { overwriteManual })
-      setFetchStatus(describeFetch(summary))
-    } catch (error) {
-      setFetchStatus({ intent: 'danger', text: describeError(error) })
-    } finally {
-      setFetching(false)
+    if (entry.source === 'unset') {
+      return (
+        <span className="bp6-text-muted" style={{ fontSize: 11 }}>
+          {t('Pending', '待填写')}
+        </span>
+      )
     }
+    return <Tag minimal>{t('manual', '手填')}</Tag>
   }
 
   return (
-    <div style={{ marginTop: 8 }}>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <Field label={t('Map', '海域')} hint={t('Type or pick', '可选择或直接输入')}>
-          <InputGroup
-            value={point.mapId || ''}
-            list={mapListId}
-            placeholder="2-2"
-            style={{ width: 110 }}
-            onChange={e =>
-              onChange({
-                mapId: e.target.value === '' ? null : e.target.value,
-                // 换海域后旧的格子一定不再成立，顺手清掉
-                cell: null,
-              })
-            }
-          />
-          <datalist id={mapListId}>
-            {mapOptions.map(id => (
-              <option key={id} value={id} />
-            ))}
-          </datalist>
-        </Field>
-
-        <Field label={t('Cell', '格子')}>
-          <InputGroup
-            value={point.cell || ''}
-            list={spotListId}
-            placeholder="B"
-            disabled={!point.mapId}
-            style={{ width: 90 }}
-            onChange={e => onChange({ cell: e.target.value === '' ? null : e.target.value.toUpperCase() })}
-          />
-          <datalist id={spotListId}>
-            {spotOptions.map(cell => (
-              <option key={cell} value={cell} />
-            ))}
-          </datalist>
-        </Field>
-
-        {event ? (
-          <Field label={t('Difficulty', '难度')}>
-            <HTMLSelect
-              value={String(point.level)}
-              onChange={e => onChange({ level: Number(e.target.value) })}
-            >
-              {LEVELS.map(item => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </HTMLSelect>
-          </Field>
-        ) : null}
-
-        <Field label={t('Rank', '评价')} hint={t('Drop data is filtered by rank', '按评价筛选统计样本')}>
-          <HTMLSelect value={point.rank} onChange={e => onChange({ rank: e.target.value })}>
-            {RANKS.map(rank => (
-              <option key={rank} value={rank}>
-                {rank}
-              </option>
-            ))}
-          </HTMLSelect>
-        </Field>
-
-        <Field label={t('Reach rate', '到达率')} hint={t('Default 100%', '默认 100%')}>
-          <NumberInput
-            value={toPercent(point.reachRate)}
-            min={1}
-            max={100}
-            onChange={value => onChange({ reachRate: value == null ? 1 : value / 100 })}
-            ariaLabel="reach rate"
-          />
-        </Field>
-
-        <div style={{ marginLeft: 'auto' }}>
-          <Button minimal intent="danger" icon="trash" onClick={onRemove}>
-            {t('Delete point', '删除点位')}
-          </Button>
-        </div>
-      </div>
-
-      <Divider style={{ margin: '10px 0' }} />
-
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        {COST_FIELDS.map(field => (
-          <Field key={field.key} label={field.label}>
-            <NumberInput
-              value={point.cost && typeof point.cost[field.key] === 'number' ? point.cost[field.key] : null}
-              min={0}
-              onChange={value =>
-                onChange({ cost: { ...(point.cost || {}), [field.key]: value == null ? 0 : value } })
-              }
-              ariaLabel={field.label}
-            />
-          </Field>
-        ))}
-      </div>
-
-      <div className="bp6-text-muted" style={{ fontSize: 11, marginTop: 4 }}>
-        {t('Per sortie', '单次出击消耗；入渠部分按入渠价折算，可与补给分开填')}
-      </div>
-
-      <Divider style={{ margin: '10px 0' }} />
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <b style={{ fontSize: 12 }}>{t('Estimate cost', '按出击记录估算')}</b>
-        <span className="bp6-text-muted" style={{ fontSize: 11 }}>
-          {t('Estimate note', '来自 Wheres My Fuel Gone 的历史记录，按海域统计，不含支援/陆航')}
-        </span>
-      </div>
-
-      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', marginTop: 4, flexWrap: 'wrap' }}>
-        <Field label={t('Map for stats', '统计海域')}>
-          <InputGroup
-            value={estMapId}
-            list={estListId}
-            placeholder="2-2"
-            style={{ width: 110 }}
-            onChange={e => setEstMapId(e.target.value)}
-          />
-          <datalist id={estListId}>
-            {mapOptions.map(id => (
-              <option key={id} value={id} />
-            ))}
-          </datalist>
-        </Field>
-        <Field label={t('Range', '时间段')}>
-          <HTMLSelect value={estRange} onChange={e => setEstRange(e.target.value)}>
-            {RANGES.map(range => (
-              <option key={range.key} value={range.key}>
-                {range.label}
-              </option>
-            ))}
-          </HTMLSelect>
-        </Field>
+    <Card style={{ marginTop: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <Button
+          minimal
           small
-          icon="calculator"
-          loading={estimating}
-          disabled={!estimateCost || !estMapId.trim()}
-          onClick={runEstimate}
-        >
-          {t('Compute', '统计')}
-        </Button>
+          icon={open ? 'chevron-down' : 'chevron-right'}
+          aria-label={open ? t('Collapse', '折叠') : t('Expand', '展开')}
+          onClick={() => setOpen(value => !value)}
+        />
+        <b style={{ fontSize: 13 }}>{pointTitle(point)}</b>
+        <InputGroup
+          value={point.note || ''}
+          placeholder={t('Note', '备注（便于区分）')}
+          style={{ width: 160 }}
+          onChange={e => onChange({ note: e.target.value })}
+        />
+        <Tag minimal>
+          {members.length} {t('ships', '艘')}
+        </Tag>
+        <Button
+          minimal
+          intent="danger"
+          icon="trash"
+          style={{ marginLeft: 'auto' }}
+          onClick={onRemove}
+          aria-label={t('Delete point', '删除点位')}
+        />
       </div>
 
-      {estimate ? (
-        !estimate.ok ? (
-          <Callout intent="danger" style={{ marginTop: 6 }}>
-            <span style={{ fontSize: 12 }}>
-              {ESTIMATE_REASONS[estimate.reason] || estimate.message || '统计失败'}
-            </span>
-          </Callout>
-        ) : estimate.count === 0 ? (
-          <Callout intent="warning" style={{ marginTop: 6 }}>
-            <span style={{ fontSize: 12 }}>
-              {t('No records in range', '该海域在所选时间段内没有出击记录。可把时间段放宽到「全部」再试。')}
-            </span>
-          </Callout>
-        ) : (
-          <div style={{ marginTop: 6 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <Tag minimal intent="primary">
-                {estimate.count} {t('sorties', '次')}
-              </Tag>
-              <span className="bp6-text-muted" style={{ fontSize: 11 }}>
-                {fmtDay(estimate.firstAt)} ~ {fmtDay(estimate.lastAt)}
-              </span>
-              {estimate.count < FEW_SAMPLES ? (
-                <Tag minimal intent="warning">
-                  {t('few samples', '样本较少')}
-                </Tag>
-              ) : null}
-            </div>
-            <div style={{ fontSize: 12, marginTop: 4 }}>
-              {t('Supply', '补给')}：{t('fuel', '油')} {round1(estimate.avg.supplyFuel)} /{' '}
-              {t('ammo', '弹')} {round1(estimate.avg.ammo)} / {t('bauxite', '铝')}{' '}
-              {round1(estimate.avg.bauxite)}
-            </div>
-            <div style={{ fontSize: 12 }}>
-              {t('Repair', '入渠')}：{t('fuel', '油')} {round1(estimate.avg.dockFuel)} /{' '}
-              {t('steel', '钢')} {round1(estimate.avg.dockSteel)}
-              {'　'}
-              {t('bucket', '桶')} {round1(estimate.avg.bucket)}
-            </div>
-            {estimate.extraAvg &&
-            (estimate.extraAvg.fuel > 0 || estimate.extraAvg.ammo > 0 || estimate.extraAvg.bauxite > 0) ? (
-              <div className="bp6-text-muted" style={{ fontSize: 11, marginTop: 2 }}>
-                {t('Extra cost', '另有支援/陆航（未计入）')}：{t('fuel', '油')}{' '}
-                {round1(estimate.extraAvg.fuel)} / {t('ammo', '弹')} {round1(estimate.extraAvg.ammo)} /{' '}
-                {t('bauxite', '铝')} {round1(estimate.extraAvg.bauxite)}
-              </div>
+      {open ? (
+        <>
+          <Divider style={{ margin: '8px 0' }} />
+
+          {/* 位置 */}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <Field label={t('Map', '海域')} hint={t('Type or pick', '可选择或直接输入')}>
+              <InputGroup
+                value={point.mapId || ''}
+                list={mapListId}
+                placeholder="2-2"
+                style={{ width: 110 }}
+                onChange={e =>
+                  onChange({
+                    mapId: e.target.value === '' ? null : e.target.value,
+                    // 换海域后旧的目标点一定不再成立
+                    cell: null,
+                  })
+                }
+              />
+              <datalist id={mapListId}>
+                {mapOptions.map(id => (
+                  <option key={id} value={id} />
+                ))}
+              </datalist>
+            </Field>
+
+            <Field label={t('Target node', '目标点')} hint={t('Cell letter', '如 B / K')}>
+              <InputGroup
+                value={point.cell || ''}
+                list={spotListId}
+                placeholder="B"
+                disabled={!point.mapId}
+                style={{ width: 90 }}
+                onChange={e => onChange({ cell: e.target.value === '' ? null : e.target.value.toUpperCase() })}
+              />
+              <datalist id={spotListId}>
+                {spotOptions.map(cell => (
+                  <option key={cell} value={cell} />
+                ))}
+              </datalist>
+            </Field>
+
+            {event ? (
+              <Field label={t('Difficulty', '难度')}>
+                <HTMLSelect value={String(point.level)} onChange={e => onChange({ level: Number(e.target.value) })}>
+                  {LEVELS.map(item => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </HTMLSelect>
+              </Field>
             ) : null}
-            <Button small intent="primary" icon="tick" style={{ marginTop: 6 }} onClick={applyEstimate}>
-              {t('Fill cost', '填入本点位消耗')}
+
+            <Field label={t('Rank', '评价')} hint={t('Sample filter', '按评价筛选样本')}>
+              <HTMLSelect value={point.rank} onChange={e => onChange({ rank: e.target.value })}>
+                {RANKS.map(rank => (
+                  <option key={rank} value={rank}>
+                    {rank}
+                  </option>
+                ))}
+              </HTMLSelect>
+            </Field>
+
+            <Field label={t('Reach rate', '到达率')} hint={t('Default 100%', '默认 100%')}>
+              <NumberInput
+                value={toPercent(point.reachRate)}
+                min={1}
+                max={100}
+                onChange={value => onChange({ reachRate: value == null ? 1 : value / 100 })}
+                ariaLabel="reach rate"
+              />
+            </Field>
+          </div>
+
+          {/* 该点位的目标舰 */}
+          <Divider style={{ margin: '10px 0' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <b style={{ fontSize: 12 }}>{t('Targets of this point', '本点位的目标舰')}</b>
+            <Button small minimal icon={pickerOpen ? 'minus' : 'add'} onClick={() => setPickerOpen(v => !v)}>
+              {t('Add target', '添加目标舰')}
             </Button>
           </div>
-        )
-      ) : null}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-        <Button
-          small
-          icon="download"
-          loading={fetching}
-          disabled={!point.mapId || !point.cell}
-          onClick={handleFetch}
-        >
-          {t('Fetch from kcwiki', '抓取掉落率')}
-        </Button>
-        <span className="bp6-text-muted" style={{ fontSize: 11 }}>
-          {t('Source note', '来源：kcwiki 掉落统计 · 30 天滚动窗口 · 缓存可能滞后')}
-        </span>
-      </div>
-
-      {fetchStatus ? (
-        <Callout intent={fetchStatus.intent} style={{ marginTop: 6 }}>
-          <span style={{ fontSize: 12 }}>{fetchStatus.text}</span>
-        </Callout>
-      ) : null}
-
-      <Divider style={{ margin: '10px 0' }} />
-
-      {targets.length === 0 ? (
-        <Callout intent="none">{t('Add target ships first', '先在上方添加目标舰。')}</Callout>
-      ) : (
-        <table className="bp6-html-table bp6-html-table-condensed" style={{ width: '100%' }}>
-          <thead>
-            <tr>
-              <th>{t('Target ship', '目标舰')}</th>
-              <th style={{ width: 150 }}>{t('Drop rate', '掉落率')} (%)</th>
-              <th>{t('Source', '来源')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {targets.map(target => {
-              const entry = point.rates ? point.rates[target.shipId] : null
-              return (
-                <tr key={target.shipId}>
-                  <td>{resolveShipName(masterShips, target.shipId)}</td>
-                  <td>
-                    <NumberInput
-                      value={toPercent(entry && entry.rate)}
-                      min={0}
-                      max={100}
-                      onChange={value => onRate(target.shipId, value == null ? null : value / 100)}
-                      placeholder={t('not set', '未设置')}
-                      ariaLabel={`rate-${target.shipId}`}
-                    />
-                  </td>
-                  <td>
-                    {entry ? (
-                      <span>
-                        <Tag minimal>{entry.source === 'kcwiki' ? 'kcwiki' : t('manual', '手填')}</Tag>
-                        {typeof entry.sampleSize === 'number' ? (
-                          <span className="bp6-text-muted" style={{ fontSize: 11, marginLeft: 6 }}>
-                            n={entry.sampleSize}
-                          </span>
-                        ) : null}
-                      </span>
-                    ) : (
-                      <span className="bp6-text-muted" style={{ fontSize: 11 }}>
-                        {t('Pending', '待填写')}
-                      </span>
-                    )}
-                  </td>
+          {members.length === 0 ? (
+            <div className="bp6-text-muted" style={{ fontSize: 12, marginTop: 4 }}>
+              {t('No target in point', '还没有目标舰。点「添加目标舰」从全局清单挑选，或直接在下方搜索。')}
+            </div>
+          ) : (
+            <table className="bp6-html-table bp6-html-table-condensed" style={{ width: '100%', marginTop: 4 }}>
+              <thead>
+                <tr>
+                  <th>{t('Target ship', '目标舰')}</th>
+                  <th style={{ width: 140 }}>{t('Drop rate', '掉落率')} (%)</th>
+                  <th>{t('Source', '来源')}</th>
+                  <th style={{ width: 40 }} />
                 </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      )}
-    </div>
+              </thead>
+              <tbody>
+                {members.map(({ shipId, entry }) => (
+                  <tr key={shipId}>
+                    <td>{resolveShipName(masterShips, shipId)}</td>
+                    <td>
+                      <NumberInput
+                        value={toPercent(entry.rate)}
+                        min={0}
+                        max={100}
+                        onChange={value => onRate(shipId, value == null ? null : value / 100)}
+                        placeholder={t('not set', '未设置')}
+                        ariaLabel={`rate-${shipId}`}
+                      />
+                    </td>
+                    <td>{sourceTag(entry)}</td>
+                    <td>
+                      <Button
+                        minimal
+                        small
+                        icon="cross"
+                        aria-label={t('Remove', '移除')}
+                        onClick={() => onRemoveMember(shipId)}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          {pickerOpen ? (
+            <div
+              style={{
+                marginTop: 6,
+                padding: 8,
+                border: '1px solid rgba(128,128,128,0.35)',
+                borderRadius: 4,
+              }}
+            >
+              {availableGlobals.length > 0 ? (
+                <div style={{ marginBottom: 8 }}>
+                  <div className="bp6-text-muted" style={{ fontSize: 11, marginBottom: 4 }}>
+                    {t('From global list', '全局清单中尚未加入本点位')}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {availableGlobals.map(item => (
+                      <Button key={item.shipId} small onClick={() => onLinkTarget(item.shipId)}>
+                        {resolveShipName(masterShips, item.shipId)}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <InputGroup
+                leftIcon="search"
+                value={query}
+                placeholder={t('Search to add', '搜索舰名加入（同时加入全局清单）')}
+                onChange={e => setQuery(e.target.value)}
+              />
+              {searchResults.length > 0 ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                  {searchResults.map(ship => (
+                    <Button
+                      key={ship.id}
+                      small
+                      minimal
+                      onClick={() => {
+                        onAddShip(ship.id)
+                        setQuery('')
+                      }}
+                    >
+                      {ship.name}
+                      <span className="bp6-text-muted" style={{ marginLeft: 4 }}>
+                        {ship.yomi}
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+              ) : query.trim() ? (
+                <div className="bp6-text-muted" style={{ fontSize: 11, marginTop: 6 }}>
+                  {t('No match', '没有匹配的舰船。')}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* 掉落率抓取 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <Button
+              small
+              icon="download"
+              loading={fetching}
+              disabled={!point.mapId || !point.cell}
+              onClick={handleFetch}
+            >
+              {t('Fetch from kcwiki', '抓取掉落率')}
+            </Button>
+            <span className="bp6-text-muted" style={{ fontSize: 11 }}>
+              {t('Source note', '来源：kcwiki 掉落统计 · 30 天滚动窗口 · 缓存可能滞后')}
+            </span>
+          </div>
+
+          {fetchStatus ? (
+            <Callout intent={fetchStatus.intent} style={{ marginTop: 6 }}>
+              <span style={{ fontSize: 12 }}>{fetchStatus.text}</span>
+            </Callout>
+          ) : null}
+
+          {candidates.length > 0 ? (
+            <div style={{ marginTop: 6 }}>
+              <div className="bp6-text-muted" style={{ fontSize: 11, marginBottom: 4 }}>
+                {t('Candidate ships', '样本中的其他舰船（点击加入，会同时进入全局清单与本点位）')}
+              </div>
+              <div style={{ maxHeight: 190, overflowY: 'auto', paddingRight: 4 }}>
+                {candidates.map(item => (
+                  <button
+                    key={item.shipId}
+                    type="button"
+                    className="bp6-button bp6-minimal bp6-small"
+                    style={{ display: 'flex', width: '100%', justifyContent: 'space-between', gap: 8 }}
+                    onClick={() => onAddCandidate(item.shipId, item.rate, item.meta)}
+                  >
+                    <span>{resolveShipName(masterShips, item.shipId)}</span>
+                    <span className="bp6-text-muted">{(item.rate * 100).toFixed(3)}%</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* 单次消耗 */}
+          <Divider style={{ margin: '10px 0' }} />
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            {COST_ROWS.map(row => (
+              <Field
+                key={row.id}
+                label={t(row.id === 'supply' ? 'Supply' : 'Repair', row.title)}
+                hint={row.hint}
+              >
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {row.keys.map(([key, label]) => (
+                    <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 3, width: 76 }}>
+                      <span className="bp6-text-muted" style={{ fontSize: 11, width: 12 }}>
+                        {label}
+                      </span>
+                      <NumberInput
+                        value={typeof cost[key] === 'number' ? cost[key] : null}
+                        min={0}
+                        onChange={value => onChange({ cost: { ...cost, [key]: value == null ? 0 : value } })}
+                        ariaLabel={key}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </Field>
+            ))}
+          </div>
+
+          {/* 消耗估算 */}
+          <Divider style={{ margin: '10px 0' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <b style={{ fontSize: 12 }}>{t('Estimate cost', '按出击记录估算')}</b>
+            <span className="bp6-text-muted" style={{ fontSize: 11 }}>
+              {t('Estimate note', '来自 Wheres My Fuel Gone 的历史记录，按海域统计，不含支援/陆航')}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 4, flexWrap: 'wrap' }}>
+            <Field label={t('Map for stats', '统计海域')}>
+              <InputGroup
+                value={estMapId}
+                list={estListId}
+                placeholder="2-2"
+                style={{ width: 110 }}
+                onChange={e => setEstMapId(e.target.value)}
+              />
+              <datalist id={estListId}>
+                {mapOptions.map(id => (
+                  <option key={id} value={id} />
+                ))}
+              </datalist>
+            </Field>
+            <Field label={t('Range', '时间段')}>
+              <HTMLSelect value={estRange} onChange={e => setEstRange(e.target.value)}>
+                {RANGES.map(range => (
+                  <option key={range.key} value={range.key}>
+                    {range.label}
+                  </option>
+                ))}
+              </HTMLSelect>
+            </Field>
+            <Field label=" " hint=" ">
+              <Button
+                small
+                icon="calculator"
+                loading={estimating}
+                disabled={!estimateCost || !estMapId.trim()}
+                onClick={runEstimate}
+              >
+                {t('Compute', '统计')}
+              </Button>
+            </Field>
+          </div>
+
+          {estimate ? (
+            !estimate.ok ? (
+              <Callout intent="danger" style={{ marginTop: 6 }}>
+                <span style={{ fontSize: 12 }}>
+                  {ESTIMATE_REASONS[estimate.reason] || estimate.message || '统计失败'}
+                </span>
+              </Callout>
+            ) : estimate.count === 0 ? (
+              <Callout intent="warning" style={{ marginTop: 6 }}>
+                <span style={{ fontSize: 12 }}>
+                  {t('No records in range', '该海域在所选时间段内没有出击记录。可把时间段放宽到「全部」再试。')}
+                </span>
+              </Callout>
+            ) : (
+              <div style={{ marginTop: 6 }}>
+                <div className="bp6-text-muted" style={{ fontSize: 11 }}>
+                  {t('Last stats', '上次统计')} {fmtDateTime(estimate.computedAt)} ·{' '}
+                  {rangeLabel(estimate.rangeKey)} · {fmtDay(estimate.firstAt)} ~ {fmtDay(estimate.lastAt)}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+                  <Tag minimal intent="primary">
+                    {estimate.count} {t('sorties', '次')}
+                  </Tag>
+                  {estimate.count < FEW_SAMPLES ? (
+                    <Tag minimal intent="warning">
+                      {t('few samples', '样本较少')}
+                    </Tag>
+                  ) : null}
+                </div>
+                <div style={{ fontSize: 12, marginTop: 4 }}>
+                  {t('Supply', '补给')}：{t('fuel', '油')} {round1(estimate.avg.supplyFuel)} /{' '}
+                  {t('ammo', '弹')} {round1(estimate.avg.ammo)} / {t('steel', '钢')}{' '}
+                  {round1(estimate.avg.supplySteel || 0)} / {t('bauxite', '铝')}{' '}
+                  {round1(estimate.avg.bauxite)}
+                </div>
+                <div style={{ fontSize: 12 }}>
+                  {t('Repair', '入渠')}：{t('fuel', '油')} {round1(estimate.avg.dockFuel)} /{' '}
+                  {t('steel', '钢')} {round1(estimate.avg.dockSteel)}
+                  {'　'}
+                  {t('bucket', '桶')} {round1(estimate.avg.bucket)}
+                </div>
+                {estimate.extraAvg &&
+                (estimate.extraAvg.fuel > 0 || estimate.extraAvg.ammo > 0 || estimate.extraAvg.bauxite > 0) ? (
+                  <div className="bp6-text-muted" style={{ fontSize: 11, marginTop: 2 }}>
+                    {t('Extra cost', '另有支援/陆航（未计入）')}：{t('fuel', '油')}{' '}
+                    {round1(estimate.extraAvg.fuel)} / {t('ammo', '弹')} {round1(estimate.extraAvg.ammo)} /{' '}
+                    {t('bauxite', '铝')} {round1(estimate.extraAvg.bauxite)}
+                  </div>
+                ) : null}
+                <Button small intent="primary" icon="tick" style={{ marginTop: 6 }} onClick={applyEstimate}>
+                  {t('Fill cost', '填入本点位消耗')}
+                </Button>
+              </div>
+            )
+          ) : null}
+        </>
+      ) : null}
+    </Card>
   )
 }
 
-export { PointEditor }
+export { PointCard }

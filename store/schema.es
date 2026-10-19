@@ -11,7 +11,7 @@ export const DATA_VERSION = '1.0.0'
 
 export const RANK_OPTIONS = ['SAB', 'SA', 'S', 'A', 'B']
 export const LEVEL_OPTIONS = [0, 1, 2, 3, 4]
-export const RATE_SOURCES = ['manual', 'kcwiki', 'measured']
+export const RATE_SOURCES = ['manual', 'kcwiki', 'measured', 'unset']
 
 const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v)
 const nonEmptyString = v => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null)
@@ -40,13 +40,15 @@ const sanitizeRates = raw => {
     if (shipId == null || !isObj(value)) {
       continue
     }
-    const rate = sanitizeRate(value.rate)
-    if (rate == null) {
+    // rate 缺失表示「已加入该点位但还没填率」，这跟「有值但非法」要分开处理
+    const hasRaw = value.rate !== null && value.rate !== undefined
+    const rate = hasRaw ? sanitizeRate(value.rate) : null
+    if (hasRaw && rate == null) {
       continue
     }
     const entry = {
       rate,
-      source: RATE_SOURCES.includes(value.source) ? value.source : 'manual',
+      source: RATE_SOURCES.includes(value.source) ? value.source : hasRaw ? 'manual' : 'unset',
     }
     if (typeof value.sampleSize === 'number' && Number.isFinite(value.sampleSize) && value.sampleSize >= 0) {
       entry.sampleSize = Math.floor(value.sampleSize)
@@ -79,6 +81,8 @@ const sanitizePoint = raw => {
 
   return {
     id,
+    // 备注：用户自己用来区分点位的标签，可空
+    note: typeof raw.note === 'string' ? raw.note.slice(0, 40) : '',
     mapId: nonEmptyString(raw.mapId),
     cell: nonEmptyString(raw.cell),
     level,

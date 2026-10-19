@@ -7,9 +7,18 @@
   - 桶单独一项，可带小数（0.3 桶/次 这类平均值）
 */
 
-export const COST_KEYS = ['supplyFuel', 'ammo', 'bauxite', 'dockFuel', 'dockSteel', 'bucket']
+export const COST_KEYS = ['supplyFuel', 'ammo', 'supplySteel', 'bauxite', 'dockFuel', 'dockSteel', 'bucket']
 
 export const RESOURCE_KEYS = ['fuel', 'ammo', 'steel', 'bauxite', 'bucket']
+
+/*
+  行分组：补给 = 出击当下扣的，入渠 = 修船折算的，桶算在入渠行。
+  钢在两组里都有：喷式强袭/支援消耗的是补给钢，修理消耗的是入渠钢。
+*/
+export const COST_GROUPS = [
+  { id: 'supply', keys: ['supplyFuel', 'ammo', 'supplySteel', 'bauxite'] },
+  { id: 'dock', keys: ['dockFuel', 'dockSteel', 'bucket'] },
+]
 
 const num = v => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0)
 
@@ -28,7 +37,7 @@ export const perSortie = cost => {
   return {
     fuel: c.supplyFuel + c.dockFuel,
     ammo: c.ammo,
-    steel: c.dockSteel,
+    steel: c.supplySteel + c.dockSteel,
     bauxite: c.bauxite,
     bucket: c.bucket,
   }

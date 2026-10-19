@@ -40,6 +40,7 @@ test('脏输入不影响其他项', () => {
   assert.deepEqual(Object.keys(normalizeCost(null)), [
     'supplyFuel',
     'ammo',
+    'supplySteel',
     'bauxite',
     'dockFuel',
     'dockSteel',

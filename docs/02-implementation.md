@@ -226,14 +226,14 @@ C 方案不自己采集，但可以「借」现成的历史数据：
       rank: 'SAB',                 // SAB|SA|S|A|B
       reachRate: 1,                // D3
       cost: {                      // D4，全部可为 0/空
-        supplyFuel: 0, ammo: 0, bauxite: 0,
-        dockFuel: 0, dockSteel: 0,
-        bucket: 0,
+        supplyFuel: 0, ammo: 0, supplySteel: 0, bauxite: 0,   // 补给
+        dockFuel: 0, dockSteel: 0, bucket: 0,                 // 入渠（桶算这行）
       },
-      rates: {                     // 按 shipId 索引，粒度为点位（§0.1）
+      note: '',                    // 表头备注，便于区分同海域的多个点位
+      rates: {                     // 键 = 已加入本点位的舰船；粒度为点位（§0.1）
         71: {
-          rate: 0.01191,           // 0~1
-          source: 'kcwiki',        // kcwiki | manual
+          rate: 0.01191,           // 0~1；null = 已加入但还没填率
+          source: 'kcwiki',        // kcwiki | manual | unset
           sampleSize: 186182,      // 抓取时的 totalCount
           timeRange: ['2026-08-29', '2026-09-28'],
           fetchedAt: 1759...,
@@ -364,7 +364,8 @@ matchShips(ships, $ships) // -> { matched: {[shipId]: rate}, unmatched: string[]
 | S4 kcwiki 抓取 | ✅ 2026-10-19（真实接口验证通过，实机确认） |
 | S5 收尾（曲线 / i18n / 主题 / README） | ✅ 2026-10-19；**UI 细调按用户要求留到最后统一处理** |
 | S6 消耗实测统计（WMFG 海域 + 时间段均值） | ✅ 2026-10-19（真实数据验证：7-1 15959 次 / 3-2 6003 次 / 2-2 410 次） |
-| S7 标签页 UI（结果剩余资源 / 期望曲线 / 设定） | ✅ 2026-10-19，待实机确认 |
+| S7 标签页 UI（结果剩余资源 / 期望曲线 / 设定） | ✅ 2026-10-19，实机确认 |
+| S8 设定页重构（点位卡片 / 备注 / 目标点 / 消耗两行 / 手选加入） | ✅ 2026-10-19，待实机确认 |
 
 ### S7 起的三页结构
 

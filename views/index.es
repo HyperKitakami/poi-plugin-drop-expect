@@ -9,6 +9,7 @@ import {
   addPoint,
   addTarget,
   clearRate,
+  linkRate,
   removePoint,
   removeTarget,
   setHave,
@@ -31,7 +32,7 @@ import {
 } from './selectors'
 import { CurvePanel } from './curve_panel'
 import { NumberInput } from './number_input'
-import { PointEditor } from './point_editor'
+import { PointCard } from './point_editor'
 import { ResultTable } from './result_table'
 import { TargetList } from './target_list'
 import { ErrorBoundary } from './error_boundary'
@@ -77,12 +78,6 @@ const Labeled = ({ label, children }) => (
     {children}
   </div>
 )
-
-const pointTitle = point => {
-  const map = point.mapId || t('map unset', '未设置海域')
-  const cell = point.cell || t('cell unset', '未设置格子')
-  return `${map} · ${cell}`
-}
 
 const PanelContent = () => {
   const dispatch = useDispatch()
@@ -133,41 +128,52 @@ const PanelContent = () => {
     async (point, { overwriteManual } = {}) => {
       const data = await fetchDrop(point)
       const { matched, unmatched } = matchShips(data.ships, masterShips)
+      const meta = {
+        source: 'kcwiki',
+        sampleSize: data.totalCount,
+        timeRange: data.timeRange || undefined,
+        fetchedAt: data.fetchedAt,
+      }
 
+      // 只更新「已经加入本点位」的舰船；其余进候选列表让用户手选
+      const members = point.rates || {}
       let applied = 0
       let skipped = 0
-      for (const target of targets) {
-        const rate = matched[target.shipId]
+      let missingCount = 0
+
+      for (const key of Object.keys(members)) {
+        const rate = matched[key]
         if (rate == null) {
+          missingCount += 1
           continue
         }
-        const existing = point.rates && point.rates[target.shipId]
+        const existing = members[key]
         if (existing && existing.source === 'manual' && !overwriteManual) {
           skipped += 1
           continue
         }
-        dispatch(
-          setRate(point.id, target.shipId, rate, {
-            source: 'kcwiki',
-            sampleSize: data.totalCount,
-            timeRange: data.timeRange || undefined,
-            fetchedAt: data.fetchedAt,
-          }),
-        )
+        dispatch(setRate(point.id, Number(key), rate, meta))
         applied += 1
       }
+
+      const candidates = Object.entries(matched)
+        .filter(([key]) => !members[key])
+        .map(([key, rate]) => ({ shipId: Number(key), rate, meta }))
+        .sort((a, b) => b.rate - a.rate)
 
       return {
         applied,
         skipped,
+        missingCount,
         totalCount: data.totalCount,
         timeRange: data.timeRange,
         noDropRate: data.noDropRate,
         unmatchedCount: unmatched.length,
-        missingCount: targets.filter(target => matched[target.shipId] == null).length,
+        candidateCount: candidates.length,
+        candidates,
       }
     },
-    [dispatch, masterShips, targets],
+    [dispatch, masterShips],
   )
 
   /*
@@ -196,8 +202,6 @@ const PanelContent = () => {
       </div>
     )
   }
-
-  const rateCount = point => (point.rates ? Object.keys(point.rates).length : 0)
 
   return (
     <div style={{ padding: 8, height: '100%', overflowY: 'auto' }}>
@@ -357,51 +361,45 @@ const PanelContent = () => {
               {t('Add point', '添加点位')}
             </Button>
           </div>
-
           {points.length === 0 ? (
             <div style={{ marginTop: 8 }}>
               <Callout intent="none">
-                {t('No point yet', '还没有点位。点「添加点位」，选择海域与格子即可。')}
+                {t('No point yet', '还没有点位。点「添加点位」，选择海域与目标点即可。')}
               </Callout>
             </div>
-          ) : (
-            points.map((point, index) => (
-              <div key={point.id} style={{ marginTop: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <b>{pointTitle(point)}</b>
-                  {rateCount(point) > 0 ? (
-                    <Tag minimal>{`${rateCount(point)} ${t('rates', '项掉落率')}`}</Tag>
-                  ) : (
-                    <Tag minimal intent="warning">
-                      {t('rate missing', '未填掉落率')}
-                    </Tag>
-                  )}
-                </div>
-                <PointEditor
-                  point={point}
-                  targets={targets}
-                  masterShips={masterShips}
-                  mapareas={mapareas}
-                  fcdMap={fcdMap}
-                  onChange={patch => dispatch(updatePoint(point.id, patch))}
-                  onRate={(shipId, rate) =>
-                    rate == null
-                      ? dispatch(clearRate(point.id, shipId))
-                      : dispatch(setRate(point.id, shipId, rate))
-                  }
-                  onFetch={handleFetchRates}
-                  estimateCost={handleEstimateCost}
-                  onRemove={() => {
-                    if (window.confirm(t('Delete this point?', '删除这个点位？'))) {
-                      dispatch(removePoint(point.id))
-                    }
-                  }}
-                />
-                {index < points.length - 1 ? <Divider style={{ margin: '12px 0 0' }} /> : null}
-              </div>
-            ))
-          )}
+          ) : null}
         </Card>
+
+        {points.map(point => (
+          <PointCard
+            key={point.id}
+            point={point}
+            targets={targets}
+            masterShips={masterShips}
+            mapareas={mapareas}
+            fcdMap={fcdMap}
+            onChange={patch => dispatch(updatePoint(point.id, patch))}
+            onRate={(shipId, rate) => dispatch(setRate(point.id, shipId, rate))}
+            onRemoveMember={shipId => dispatch(clearRate(point.id, shipId))}
+            onLinkTarget={shipId => dispatch(linkRate(point.id, shipId))}
+            onAddShip={shipId => {
+              dispatch(addTarget(shipId))
+              dispatch(linkRate(point.id, shipId))
+            }}
+            onAddCandidate={(shipId, rate, meta) => {
+              dispatch(addTarget(shipId))
+              dispatch(linkRate(point.id, shipId))
+              dispatch(setRate(point.id, shipId, rate, meta))
+            }}
+            onFetch={handleFetchRates}
+            estimateCost={handleEstimateCost}
+            onRemove={() => {
+              if (window.confirm(t('Delete this point?', '删除这个点位？'))) {
+                dispatch(removePoint(point.id))
+              }
+            }}
+          />
+        ))}
       </Panel>
     </div>
   )

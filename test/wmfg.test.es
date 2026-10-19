@@ -21,7 +21,8 @@ test('归一化：六项消耗按 WMFG 的下标拆开', () => {
   assert.equal(record.cost.ammo, 22)
   assert.equal(record.cost.bauxite, 33)
   assert.equal(record.cost.dockFuel, 44)
-  assert.equal(record.cost.dockSteel, 66, '入渠钢与喷式强袭钢都算钢')
+  assert.equal(record.cost.dockSteel, 55, '入渠钢单独计')
+  assert.equal(record.cost.supplySteel, 11, '喷式强袭消耗的是补给钢')
   assert.equal(record.cost.bucket, 1)
 })
 
@@ -48,7 +49,8 @@ test('归一化：缺字段/脏数据不抛错', () => {
   assert.equal(dirty.cost.supplyFuel, 0)
   assert.equal(dirty.cost.ammo, 0)
   assert.equal(dirty.cost.dockFuel, 1)
-  assert.equal(dirty.cost.dockSteel, 5)
+  assert.equal(dirty.cost.dockSteel, 2)
+  assert.equal(dirty.cost.supplySteel, 3)
 })
 
 const RECORDS = [
@@ -64,7 +66,8 @@ test('聚合：按海域过滤，均值按样本数算', () => {
   assert.equal(result.avg.ammo, 13.5)
   assert.equal(result.avg.bauxite, 19)
   assert.equal(result.avg.dockFuel, 22)
-  assert.equal(result.avg.dockSteel, 33)
+  assert.equal(result.avg.dockSteel, 27.5, '（55 + 0）/ 2，喷式强袭钢不计入这一项')
+  assert.equal(result.avg.supplySteel, 5.5, '（5 + 6 + 0）/ 2')
   assert.equal(result.avg.bucket, 0.5)
   assert.equal(result.firstAt, 1000)
   assert.equal(result.lastAt, 2000)

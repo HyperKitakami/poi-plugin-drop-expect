@@ -14,6 +14,7 @@ export const TARGET_ADD = `${PREFIX}TARGET_ADD`
 export const TARGET_REMOVE = `${PREFIX}TARGET_REMOVE`
 export const RATE_SET = `${PREFIX}RATE_SET`
 export const RATE_CLEAR = `${PREFIX}RATE_CLEAR`
+export const RATE_LINK = `${PREFIX}RATE_LINK`
 export const HAVE_SET = `${PREFIX}HAVE_SET`
 export const UI_SET = `${PREFIX}UI_SET`
 export const P_STATE_READY = `${PREFIX}P_STATE_READY`
@@ -29,12 +30,13 @@ export const nextPointId = () => `p-${Date.now()}-${seq++}`
  */
 export const createPoint = (patch = {}) => ({
   id: nextPointId(),
+  note: patch.note || '',
   mapId: patch.mapId ?? null,
   cell: patch.cell ?? null,
   level: patch.level ?? 0,
   rank: patch.rank ?? 'SAB',
   reachRate: 1,
-  cost: { supplyFuel: 0, ammo: 0, bauxite: 0, dockFuel: 0, dockSteel: 0, bucket: 0 },
+  cost: { supplyFuel: 0, ammo: 0, supplySteel: 0, bauxite: 0, dockFuel: 0, dockSteel: 0, bucket: 0 },
   rates: {},
 })
 
@@ -58,6 +60,12 @@ export const setRate = (pointId, shipId, rate, meta) => ({
 })
 
 export const clearRate = (pointId, shipId) => ({ type: RATE_CLEAR, pointId, shipId })
+
+/**
+ * 把一个舰船挂到点位下但还不填率（占位）。
+ * 抓取列表里手选、或从全局清单里挑进来时用它，之后由 RATE_SET 补值。
+ */
+export const linkRate = (pointId, shipId) => ({ type: RATE_LINK, pointId, shipId })
 
 /** manual=true 表示用户手改过，此后不再从 poi 自动同步 */
 export const setHave = (patch, manual = true) => ({ type: HAVE_SET, patch, manual })
