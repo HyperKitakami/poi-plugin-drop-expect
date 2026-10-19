@@ -213,14 +213,20 @@ export const matchShips = (ships, masterShips) => {
 /*
   反向查询：某艘舰在哪些点位掉落。
 
-  接口是 db.kcwiki.cn/drop/ship/{舰船ID}/{评价}.json，页面 /drop/ship/153 用的就是它。
-  一条请求拿全所有点位，比「逐图逐格抓」便宜几个数量级。
+  接口：/api/cache/drop_ship_{舰船ID}-{评价}
+  与点位缓存同一套命名规则、同一份统计（实测同一点位的 rate / totalCount / rankCount
+  与 drop_map_* 完全一致），同样带 30 天滚动窗口。
 
-  ⚠️ 这份索引**明显滞后**：实测 2026-10 时 generateTime 仍是 2022-05-11，
-  且 700 以后的舰船 ID 直接 404（索引只覆盖当年存在的舰）。
-  所以它只能当「候选来源」用，掉落率必须再用点位接口（§fetchDrop）校正一次。
+  ⚠️ 不要用 /drop/ship/{id}/{rank}.json —— 那是老页面 ship.js 在用的旧索引，
+  实测已冻结在 2022-05，新舰返回 200 + 空 body。新版页面用的是 ship2.js，
+  走的就是下面的 /api/cache 路径。
 */
 
+// 样本低于这个数的点位排在最后，并标「样本少」：n=3 的偶然掉落不具备参考性
+export const SHIP_MIN_SAMPLE = 100
+
+// 难度：接口里用汉字（甲/乙/丙/丁），点位里用 1~4（丁=1 … 甲=4）
+export const LEVEL_LABEL = { 1: '丁', 2: '丙', 3: '乙', 4: '甲' }
 const DIFFICULTY_LEVEL = { 丁: 1, 丙: 2, 乙: 3, 甲: 4 }
 
 /** 解析索引键：'2-2-B'、'5-4-Z(Boss)'、'48-7-Z(Boss)-甲' → 点位 */
@@ -268,16 +274,18 @@ export const parseShipDropPayload = json => {
     })
   }
   /*
-    按**样本量**降序，而不是按掉落率。
+    排序：先按「样本够不够」分层，层内按掉落率降序。
 
-    索引里混着大量 n=3 的偶然掉落（14% 之类），按率排会把首屏塞满噪声；
-    样本多的点位才是「大家都在刷的点」，率也更值得参考。
-    率相同的再按率排，保证顺序稳定。
+    纯按率排，n=3 的偶然掉落会以 14% 之类挤到首屏；纯按样本排，
+    又会让真正高掉率的点淹没在「样本多但率低」的大图里。
+    分层能同时避开这两个坑，且规则一句话能说清。
   */
-  entries.sort((a, b) => b.count - a.count || b.rate - a.rate)
+  const tier = item => (item.count >= SHIP_MIN_SAMPLE ? 0 : 1)
+  entries.sort((a, b) => tier(a) - tier(b) || b.rate - a.rate || b.count - a.count)
   return {
     totalCount: Number(json.totalCount) || 0,
     generatedAt: typeof json.generateTime === 'string' ? json.generateTime : null,
+    timeRange: Array.isArray(json.timeRange) && json.timeRange.length === 2 ? json.timeRange.slice(0, 2) : null,
     entries,
   }
 }
@@ -290,7 +298,7 @@ export const fetchShipDrops = (shipId, rank = 'SAB') => {
   if (!RANKS.has(rank)) {
     return Promise.reject(fail('BAD_SHIP', '评价不合法'))
   }
-  return requestJson(`https://db.kcwiki.cn/drop/ship/${id}/${rank}.json`).then(json => {
+  return requestJson(`${BASE}/drop_ship_${id}-${rank}`).then(json => {
     const parsed = parseShipDropPayload(json)
     if (parsed.entries.length === 0) {
       throw fail('EMPTY', '该舰船没有掉落记录')

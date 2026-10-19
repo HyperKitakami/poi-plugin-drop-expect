@@ -8,6 +8,7 @@ import {
   buildUrl,
   matchShips,
   parseDropPayload,
+  LEVEL_LABEL,
   parseShipDropKey,
   parseShipDropPayload,
   pointKeyOf,
@@ -126,7 +127,8 @@ test('反查键：非法键返回 null，不抛错', () => {
 test('反查返回：百分比转小数、剔除 0 率、按掉率降序', () => {
   const parsed = parseShipDropPayload({
     totalCount: 900,
-    generateTime: '2022-05-11 00:33:55',
+    generateTime: '2026-09-29 03:50:24',
+    timeRange: ['2026-08-29 22:20:02', '2026-09-28 22:20:02'],
     data: {
       '2-2-B': { rate: 1.177, totalCount: 6325 },
       '3-3-M(Boss)': { rate: 0.5, totalCount: 100 },
@@ -134,7 +136,8 @@ test('反查返回：百分比转小数、剔除 0 率、按掉率降序', () =>
       '坏键': { rate: 9, totalCount: 1 },
     },
   })
-  assert.equal(parsed.generatedAt, '2022-05-11 00:33:55')
+  assert.equal(parsed.generatedAt, '2026-09-29 03:50:24')
+  assert.deepEqual(parsed.timeRange, ['2026-08-29 22:20:02', '2026-09-28 22:20:02'])
   assert.equal(parsed.totalCount, 900)
   assert.deepEqual(
     parsed.entries.map(item => [item.mapId, item.cell, item.isBoss, Number(item.rate.toFixed(4))]),
@@ -142,6 +145,22 @@ test('反查返回：百分比转小数、剔除 0 率、按掉率降序', () =>
       ['2-2', 'B', false, 0.0118],
       ['3-3', 'M', true, 0.005],
     ],
+  )
+})
+
+test('反查排序：低样本的高掉落率排到后面', () => {
+  const parsed = parseShipDropPayload({
+    data: {
+      '6-4-H': { rate: 14.286, totalCount: 3 },
+      '2-2-B': { rate: 1.191, totalCount: 2217 },
+      '1-5-C': { rate: 3.545, totalCount: 24 },
+      '1-1-B': { rate: 1.93, totalCount: 1818 },
+    },
+  })
+  assert.deepEqual(
+    parsed.entries.map(item => `${item.mapId}-${item.cell}`),
+    ['1-1-B', '2-2-B', '6-4-H', '1-5-C'],
+    '样本 >= 100 的按掉率降序在前；样本不足的也按掉率降序，但整层在后',
   )
 })
 
@@ -157,4 +176,10 @@ test('点位键：同格不同难度视为不同点位', () => {
     pointKeyOf({ mapId: '48-7', cell: 'Z', level: 1 }),
     pointKeyOf({ mapId: '48-7', cell: 'Z', level: 4 }),
   )
+})
+
+test('难度映射：1~4 与 丁丙乙甲 一一对应', () => {
+  assert.deepEqual(LEVEL_LABEL, { 1: '丁', 2: '丙', 3: '乙', 4: '甲' })
+  assert.equal(parseShipDropKey(`1-1-A-${LEVEL_LABEL[4]}`).level, 4)
+  assert.equal(parseShipDropKey(`1-1-A-${LEVEL_LABEL[1]}`).level, 1)
 })

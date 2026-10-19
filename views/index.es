@@ -177,16 +177,15 @@ const PanelContent = () => {
   )
 
   /*
-    反查点位：把 kcwiki 舰船索引给出的候选点位加入配置。
+    反查点位：把「这艘船掉在哪些点」的结果直接建成配置。
 
-    索引是旧的（实测停在 2022-05），所以「加入」和「校正」分开做：
-    先按候选建点位并挂上该舰，再逐点抓当前数据覆盖掉落率。
-    抓不到该舰的点位保留（可能只是样本少），但会在返回值里计数，
-    由界面提示用户自己删。
+    数据来自 /api/cache/drop_ship_{id}-{rank}，与点位抓取同一份统计，
+    所以不需要再逐点重抓——候选里带的 rate 就是当前值，
+    sampleSize 用该点位该舰的样本数。
   */
   const handleReverseAdd = useCallback(
-    async (shipId, shipName, candidates) => {
-      const created = candidates.map(candidate => {
+    (shipId, shipName, candidates, timeRange) => {
+      candidates.forEach(candidate => {
         const action = addPoint({
           mapId: candidate.mapId,
           cell: candidate.cell,
@@ -195,48 +194,18 @@ const PanelContent = () => {
         })
         dispatch(action)
         dispatch(linkRate(action.point.id, shipId))
-        return { pointId: action.point.id, ...candidate }
+        dispatch(
+          setRate(action.point.id, shipId, candidate.rate, {
+            source: 'kcwiki',
+            sampleSize: candidate.count,
+            timeRange: timeRange || undefined,
+            fetchedAt: Date.now(),
+          }),
+        )
       })
-
-      let confirmed = 0
-      let missing = 0
-      let failed = 0
-      for (const item of created) {
-        try {
-          const data = await fetchDrop({
-            mapId: item.mapId,
-            cell: item.cell,
-            level: item.level,
-            rank: 'SAB',
-          })
-          const { matched } = matchShips(data.ships, masterShips)
-          const rate = matched[shipId]
-          if (typeof rate !== 'number' || rate <= 0) {
-            missing += 1
-            continue
-          }
-          dispatch(
-            setRate(item.pointId, shipId, rate, {
-              source: 'kcwiki',
-              sampleSize: data.totalCount,
-              timeRange: data.timeRange || undefined,
-              fetchedAt: data.fetchedAt,
-            }),
-          )
-          confirmed += 1
-        } catch (err) {
-          // 404 / 无样本都算「当前数据里没有」，与「网络失败」分开计
-          if (err && (err.code === 'NOT_FOUND' || err.code === 'EMPTY')) {
-            missing += 1
-          } else {
-            failed += 1
-          }
-        }
-      }
-
-      return { added: created.length, confirmed, missing, failed }
+      return { added: candidates.length }
     },
-    [dispatch, masterShips],
+    [dispatch],
   )
 
   /*

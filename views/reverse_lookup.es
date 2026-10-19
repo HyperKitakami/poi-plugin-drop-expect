@@ -1,26 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Button, Checkbox, Classes, Tag } from '@blueprintjs/core'
+import { Button, Checkbox, Tag } from '@blueprintjs/core'
 
-import { fetchShipDrops, pointKeyOf } from '../services/kcwiki'
+import { LEVEL_LABEL, SHIP_MIN_SAMPLE, fetchShipDrops, pointKeyOf } from '../services/kcwiki'
 import { fmtCount, fmtPercent } from './format'
 import { t } from './i18n'
 
 /*
   按目标舰反查点位。
 
-  数据来自 kcwiki 的舰船索引 /drop/ship/{id}/SAB.json —— 一条请求拿全部点位，
-  比「逐图逐格抓」便宜几个数量级。
+  接口 /api/cache/drop_ship_{id}-{rank} 与点位缓存同源、同窗口（30 天滚动），
+  实测同一点位的 rate / totalCount / rankCount 与 drop_map_* 完全一致，
+  所以这一份数据可以直接用来建点位，不必再逐点重抓。
 
-  ⚠️ 但这份索引明显滞后（实测 2026-10 时 generateTime 仍停在 2022-05-11，
-  且 700 之后的舰船 ID 直接 404）。所以它只当「候选来源」：
-  界面上明写索引时间，加入后由调用方立刻用点位接口校正掉落率，以校正结果为准。
+  排序按「样本够 → 样本少」分层，层内按掉落率降序：
+  纯按率排会被 n=3 的偶然掉落占满首屏。
 */
 
-const DANGER = Classes.TEXT_DANGER || 'bp6-text-danger'
 const MUTED = 'bp6-text-muted'
 const MAX_AUTO_SELECT = 5
-// 样本低于这个数的点位不默认勾选：多半是「偶然掉过一次」，加进去只会污染配置
-const LOW_SAMPLE = 100
 
 const pointLabel = entry => `${entry.mapId} ${entry.cell}`
 
@@ -51,7 +48,7 @@ const ReverseLookup = ({ shipId, shipName, existingKeys, onApply, onClose }) => 
         setResult(data)
         // 默认勾选「还没配过、样本又够」的前几个，省掉逐行点
         const free = data.entries.filter(item => !existingKeys.has(pointKeyOf(item)))
-        const solid = free.filter(item => item.count >= LOW_SAMPLE)
+        const solid = free.filter(item => item.count >= SHIP_MIN_SAMPLE)
         setSelected(new Set((solid.length > 0 ? solid : free).slice(0, MAX_AUTO_SELECT).map(pointKeyOf)))
       })
       .catch(err => {
@@ -89,7 +86,7 @@ const ReverseLookup = ({ shipId, shipName, existingKeys, onApply, onClose }) => 
     setApplying(true)
     setSummary(null)
     try {
-      setSummary(await onApply(picked))
+      setSummary(await onApply(picked, result.timeRange || null))
     } catch (err) {
       setSummary({ added: 0, confirmed: 0, missing: 0, failed: picked.length })
     } finally {
@@ -97,33 +94,12 @@ const ReverseLookup = ({ shipId, shipName, existingKeys, onApply, onClose }) => 
     }
   }
 
-  const renderSummary = () => {
-    if (!summary) {
-      return null
-    }
-    const parts = [`${t('Added points', '已加入')} ${summary.added}`]
-    if (summary.confirmed) {
-      parts.push(`${t('Rates refreshed', '已校正')} ${summary.confirmed}`)
-    }
-    if (summary.failed) {
-      parts.push(`${t('Fetch failed', '抓取失败')} ${summary.failed}`)
-    }
-    return (
-      <div style={{ marginTop: 6 }}>
-        <div className={MUTED} style={{ fontSize: 11 }}>
-          {parts.join(' · ')}
-        </div>
-        {summary.missing ? (
-          <div className={DANGER} style={{ fontSize: 11, marginTop: 2 }}>
-            {t('Not in current data', '有 {0} 个点位在当前数据里没有该舰，可能已移出掉落池（已保留，可手动删除）').replace(
-              '{0}',
-              String(summary.missing),
-            )}
-          </div>
-        ) : null}
+  const renderSummary = () =>
+    summary ? (
+      <div className={MUTED} style={{ fontSize: 11, marginTop: 6 }}>
+        {t('Added points', '已加入')} {summary.added}
       </div>
-    )
-  }
+    ) : null
 
   return (
     <div style={{ marginTop: 8, borderTop: '1px solid rgba(128,128,128,0.25)', paddingTop: 8 }}>
@@ -150,7 +126,7 @@ const ReverseLookup = ({ shipId, shipName, existingKeys, onApply, onClose }) => 
       {error ? (
         <div className={MUTED} style={{ fontSize: 11, marginTop: 4 }}>
           {error.code === 'NOT_FOUND' || error.code === 'EMPTY'
-            ? t('No drop records', '该舰在索引里没有掉落记录（索引只覆盖到 2022 年前后，新舰可能查不到）')
+            ? t('No drop records', '该舰没有掉落记录（可能样本不足，或只在未收录的点位掉落）')
             : `${t('Fetch failed', '抓取失败')}：${error.message || ''}`}
         </div>
       ) : null}
@@ -158,8 +134,9 @@ const ReverseLookup = ({ shipId, shipName, existingKeys, onApply, onClose }) => 
       {result ? (
         <>
           <div className={MUTED} style={{ fontSize: 11, marginTop: 2 }}>
-            {t('Index time', '索引更新于')} {result.generatedAt || '—'} ·{' '}
-            {t('Index note', '按样本量排序；旧索引可能缺少较新的点位，加入后会按当前数据校正掉落率')}
+            {t('Window', '统计窗口')} {result.timeRange ? `${result.timeRange[0].slice(0, 10)} ~ ${result.timeRange[1].slice(0, 10)}` : '—'}
+            {' · '}
+            {t('Index note', '按掉落率排序，样本少于 100 的点位排在最后')}
           </div>
 
           <div style={{ maxHeight: 220, overflowY: 'auto', marginTop: 6 }}>
@@ -185,7 +162,7 @@ const ReverseLookup = ({ shipId, shipName, existingKeys, onApply, onClose }) => 
                     ) : null}
                     {entry.level ? (
                       <Tag minimal style={{ marginLeft: 4 }}>
-                        {t('Difficulty', '难度')} {entry.level}
+                        {LEVEL_LABEL[entry.level] || entry.level}
                       </Tag>
                     ) : null}
                     {exists ? (
@@ -199,7 +176,7 @@ const ReverseLookup = ({ shipId, shipName, existingKeys, onApply, onClose }) => 
                     style={{ marginLeft: 'auto', fontSize: 11, fontVariantNumeric: 'tabular-nums' }}
                   >
                     {fmtPercent(entry.rate, 2)}
-                    {entry.count < LOW_SAMPLE ? (
+                    {entry.count < SHIP_MIN_SAMPLE ? (
                       <span style={{ marginLeft: 4 }}>{t('few samples', '样本少')}</span>
                     ) : null}
                     {' · n='}
@@ -221,7 +198,7 @@ const ReverseLookup = ({ shipId, shipName, existingKeys, onApply, onClose }) => 
               {t('Add selected', '加入选中')}（{picked.length}）
             </Button>
             <span className={MUTED} style={{ fontSize: 11 }}>
-              {t('Candidate only', '候选来自旧索引，加入后会重新抓取当前掉落率')}
+              {t('Candidate only', '掉落率与本插件抓取的是同一份统计，加入即可直接用')}
             </span>
           </div>
 

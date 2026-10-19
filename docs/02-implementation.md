@@ -335,8 +335,9 @@ fetchDrop(point)        // -> { totalCount, timeRange, ships: { name: {rate,coun
 matchShips(ships, $ships) // -> { matched: {[shipId]: rate}, unmatched: string[] }
 
 // 反向查询（舰 → 点位）
-fetchShipDrops(shipId, rank)  // GET /drop/ship/{id}/{rank}.json
-                              // -> { totalCount, generatedAt, entries: [{mapId,cell,level,isBoss,rate,count}] }
+fetchShipDrops(shipId, rank)  // GET /api/cache/drop_ship_{id}-{rank}
+                              // -> { totalCount, timeRange, entries: [{mapId,cell,level,isBoss,rate,count}] }
+                              // 与 drop_map_* 同源同窗口，rate 可直接用；按「样本>=100 / 其余」分层再按率降序
 parseShipDropKey('48-7-Z(Boss)-甲') // -> { mapId:'48-7', cell:'Z', level:1, isBoss:true }
 pointKeyOf({mapId,cell,level})      // '2-2|B|0'  用于去重/禁用已配点位
 ```
@@ -373,7 +374,7 @@ pointKeyOf({mapId,cell,level})      // '2-2|B|0'  用于去重/禁用已配点�
 | S6 消耗实测统计（WMFG 海域 + 时间段均值） | ✅ 2026-10-19（真实数据验证：7-1 15959 次 / 3-2 6003 次 / 2-2 410 次） |
 | S7 标签页 UI（结果剩余资源 / 期望曲线 / 设定） | ✅ 2026-10-19，实机确认 |
 | S8 设定页重构（点位卡片 / 备注 / 目标点 / 消耗两行 / 手选加入） | ✅ 2026-10-19，实机确认 |
-| S9 按目标舰反查点位（旧索引候选 + 点位接口校正） | ✅ 2026-10-19，真实数据验证（排序按样本量；索引停在 2022-05） |
+| S9 按目标舰反查点位（`/api/cache/drop_ship_*`，与点位同源） | ✅ 2026-10-19，真实数据验证（夏雲 582：窗口 2026-08-29~09-28） |
 
 ### S7 起的三页结构
 
