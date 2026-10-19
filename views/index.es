@@ -225,7 +225,7 @@ const PanelContent = () => {
       <Panel active={tab === 'result'}>
         <Card>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <Labeled label={t('Target confidence', '目标把握')}>
+            <Labeled label={t('Target expectation', '目标期望')}>
               <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                 <NumberInput
                   value={Number((probTarget * 100).toFixed(2))}
@@ -234,7 +234,7 @@ const PanelContent = () => {
                   onChange={value =>
                     dispatch(setUi({ probTarget: value == null ? 0.9 : value / 100 }))
                   }
-                  ariaLabel="target confidence"
+                  ariaLabel="target expectation"
                 />
                 {PROB_PRESETS.map(preset => (
                   <Button
