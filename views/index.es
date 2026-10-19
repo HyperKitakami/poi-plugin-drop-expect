@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import { Button, Callout, Card, Divider, HTMLSelect, Tag } from '@blueprintjs/core'
 
 import { buildReport } from '../calc/aggregate'
+import { DEFAULT_WEIGHTS, normalizeWeights } from '../calc/cost'
 import { fetchDrop, matchShips } from '../services/kcwiki'
 import { aggregateRecords, readRecords } from '../services/wmfg'
 import {
@@ -31,6 +32,7 @@ import {
   uiSelector,
 } from './selectors'
 import { CurvePanel } from './curve_panel'
+import { RESOURCE_LABEL } from './format'
 import { NumberInput } from './number_input'
 import { PointCard } from './point_editor'
 import { ResultTable } from './result_table'
@@ -54,11 +56,23 @@ const MODE_OPTIONS = [
   { value: 'all', label: '集合 · 全部收集' },
 ]
 
+/*
+  标签写成函数而不是常量：t() 要等 poi 注入 i18n 之后才拿得到译文，
+  模块加载时求值会永久锁死在中文兜底上。
+*/
 const SORT_OPTIONS = [
-  { value: 'n', label: '按次数' },
-  { value: 'fuel', label: '按总油' },
-  { value: 'rate', label: '按掉落率' },
+  { value: 'n', label: () => t('Sort by sorties', '按次数') },
+  { value: 'rate', label: () => t('Sort by rate', '按掉落率') },
+  { value: 'fuel', label: () => t('Sort by fuel', '按总油') },
+  { value: 'ammo', label: () => t('Sort by ammo', '按总弹') },
+  { value: 'steel', label: () => t('Sort by steel', '按总钢') },
+  { value: 'bauxite', label: () => t('Sort by bauxite', '按总铝') },
+  { value: 'bucket', label: () => t('Sort by bucket', '按总桶') },
+  { value: 'custom', label: () => t('Sort by custom', '按加权') },
 ]
+
+// 自定义排序的权重项；标签复用资源名
+const WEIGHT_KEYS = ['fuel', 'ammo', 'steel', 'bauxite', 'bucket']
 
 const TABS = [
   { id: 'result', label: '计算结果' },
@@ -96,6 +110,9 @@ const PanelContent = () => {
   const [tab, setTab] = useState('result')
 
   const mode = MODE_OPTIONS.some(option => option.value === ui.mode) ? ui.mode : 'single'
+  const sortKey = SORT_OPTIONS.some(option => option.value === ui.sortKey) ? ui.sortKey : 'n'
+  // normalizeWeights 每次都返回新对象；不 memo 会让 buildReport 每帧重算
+  const weights = useMemo(() => normalizeWeights(ui.weights), [ui.weights])
   const probTarget =
     typeof ui.probTarget === 'number' && ui.probTarget > 0 && ui.probTarget < 1 ? ui.probTarget : 0.9
 
@@ -112,9 +129,10 @@ const PanelContent = () => {
         mode,
         probTarget,
         have,
-        sortKey: ui.sortKey || 'n',
+        sortKey,
+        weights,
       }),
-    [points, targets, mode, probTarget, have, ui.sortKey],
+    [points, targets, mode, probTarget, have, sortKey, weights],
   )
 
   /*
@@ -298,16 +316,49 @@ const PanelContent = () => {
 
             <Labeled label={t('Sort', '排序')}>
               <HTMLSelect
-                value={ui.sortKey || 'n'}
+                value={sortKey}
                 onChange={e => dispatch(setUi({ sortKey: e.target.value }))}
               >
                 {SORT_OPTIONS.map(option => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {option.label()}
                   </option>
                 ))}
               </HTMLSelect>
             </Labeled>
+
+            {/* 选「按加权」后才出现：权重改了排序就变，没必要一直占位 */}
+            {sortKey === 'custom' ? (
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, flexWrap: 'wrap' }}>
+                <span className="bp6-text-muted" style={{ fontSize: 11, marginBottom: 6 }}>
+                  {t('Weights', '权重')}
+                </span>
+                {WEIGHT_KEYS.map(key => (
+                  <div key={key} style={{ width: 56 }}>
+                    <div className="bp6-text-muted" style={{ fontSize: 11, marginBottom: 2 }}>
+                      {RESOURCE_LABEL[key]}
+                    </div>
+                    <NumberInput
+                      value={weights[key]}
+                      width={56}
+                      min={0}
+                      ariaLabel={`${t('Weights', '权重')} ${RESOURCE_LABEL[key]}`}
+                      onChange={next =>
+                        dispatch(setUi({ weights: { ...weights, [key]: next == null ? 0 : next } }))
+                      }
+                    />
+                  </div>
+                ))}
+                <Button
+                  minimal
+                  small
+                  style={{ marginBottom: 2 }}
+                  onClick={() => dispatch(setUi({ weights: DEFAULT_WEIGHTS }))}
+                >
+                  {t('Reset', '重置')}
+                </Button>
+              </div>
+            ) : null}
           </div>
         </Card>
 

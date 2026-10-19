@@ -11,6 +11,8 @@ import {
   rateOf,
 } from '../calc/aggregate.es'
 
+import { DEFAULT_WEIGHTS } from '../calc/cost.es'
+
 const POINTS = [
   {
     id: 'p1',
@@ -266,4 +268,44 @@ test('集合口径：点位成员没填率才算集不齐', () => {
   })
   assert.equal(report.rows[0].reason, 'incomplete-set')
   assert.deepEqual(report.rows[0].missing, [72])
+})
+
+test('自定义排序：按加权消耗升序，未填消耗的点位沉底', () => {
+  const sameRate = { 71: { rate: 0.05 } }
+  const points = [
+    // 油 1000/次：默认权重下最贵
+    { id: 'oil', mapId: '2-2', cell: 'B', level: 0, rank: 'SAB', reachRate: 1, cost: { supplyFuel: 1000 }, rates: sameRate },
+    // 铝 10/次：×10 权重 = 100，比油便宜得多
+    { id: 'alu', mapId: '2-3', cell: 'G', level: 0, rank: 'SAB', reachRate: 1, cost: { bauxite: 10 }, rates: sameRate },
+    // 没填消耗
+    { id: 'empty', mapId: '3-3', cell: 'M', level: 0, rank: 'SAB', reachRate: 1, cost: {}, rates: sameRate },
+  ]
+  const report = buildReport({
+    points,
+    targets: [{ shipId: 71 }],
+    mode: 'single',
+    probTarget: 0.9,
+    have: HAVE,
+    sortKey: 'custom',
+    weights: DEFAULT_WEIGHTS,
+  })
+  const rows = report.groups[0].rows
+  assert.deepEqual(rows.map(r => r.pointId), ['alu', 'oil', 'empty'])
+  assert.ok(rows[0].weighted < rows[1].weighted)
+  assert.equal(rows[2].weighted, null, '没填消耗不给加权值')
+})
+
+test('按单项资源排序：同样沉底未填消耗的行', () => {
+  const report = buildReport({
+    points: [
+      { id: 'a', mapId: '2-2', cell: 'B', level: 0, rank: 'SAB', reachRate: 1, cost: { supplyFuel: 100 }, rates: { 71: { rate: 0.05 } } },
+      { id: 'b', mapId: '2-3', cell: 'G', level: 0, rank: 'SAB', reachRate: 1, cost: {}, rates: { 71: { rate: 0.05 } } },
+    ],
+    targets: [{ shipId: 71 }],
+    mode: 'single',
+    probTarget: 0.9,
+    have: HAVE,
+    sortKey: 'fuel',
+  })
+  assert.deepEqual(report.groups[0].rows.map(r => r.pointId), ['a', 'b'])
 })

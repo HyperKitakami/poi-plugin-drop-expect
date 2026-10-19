@@ -7,6 +7,7 @@
   这里不 import 任何 poi 模块，因此可以被 node --test 直接覆盖。
 */
 
+import { DEFAULT_WEIGHTS, normalizeWeights } from '../calc/cost'
 import { sanitizePState } from '../store/schema'
 import {
   HAVE_SET,
@@ -34,7 +35,15 @@ export const initState = {
   // 现有资源（默认从 poi 同步，manual=true 后不再被覆盖）
   have: { fuel: 0, ammo: 0, steel: 0, bauxite: 0, bucket: 0, manual: false },
   // 界面选项
-  ui: { activeTargetId: null, probTarget: 0.9, mode: 'single', sortKey: 'n', sortDesc: false },
+  ui: {
+    activeTargetId: null,
+    probTarget: 0.9,
+    mode: 'single',
+    sortKey: 'n',
+    sortDesc: false,
+    // 自定义排序的权重（默认按稀缺度给，见 calc/cost.es）
+    weights: DEFAULT_WEIGHTS,
+  },
 }
 
 /*
@@ -50,7 +59,11 @@ const normalize = state => ({
   targets: Array.isArray(state && state.targets) ? state.targets : [],
   points: Array.isArray(state && state.points) ? state.points : [],
   have: { ...initState.have, ...((state && state.have) || {}) },
-  ui: { ...initState.ui, ...((state && state.ui) || {}) },
+  ui: {
+    ...initState.ui,
+    ...((state && state.ui) || {}),
+    weights: normalizeWeights(state && state.ui && state.ui.weights),
+  },
 })
 
 // 已经是完整形状就原样返回，避免每次 dispatch 都产生新引用导致无谓重渲染

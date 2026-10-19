@@ -100,5 +100,16 @@
   "Add selected": "加入选中",
   "Added points": "已加入",
   "Fetch failed": "抓取失败",
-  "Window": "统计窗口"
+  "Window": "统计窗口",
+  "Sort by sorties": "按次数",
+  "Sort by rate": "按掉落率",
+  "Sort by fuel": "按总油",
+  "Sort by ammo": "按总弹",
+  "Sort by steel": "按总钢",
+  "Sort by bauxite": "按总铝",
+  "Sort by bucket": "按总桶",
+  "Sort by custom": "按加权",
+  "Weights": "权重",
+  "Weighted": "加权",
+  "Reset": "重置"
 }

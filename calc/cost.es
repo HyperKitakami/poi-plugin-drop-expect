@@ -92,3 +92,47 @@ export const afford = (have, need) => {
   }
   return { ok, shortfall }
 }
+
+/*
+  加权消耗：把五项折成一个可比的价格。
+
+  默认权重按「稀缺程度」给：油 1、弹 0.5、钢 0.3、铝 10、桶 200。
+  铝和桶远高于油弹钢，是因为远征产出慢、且桶还要额外补给；
+  钢给 0.3 是因为它最容易堆积。数值只是默认值，界面上可以改。
+*/
+export const DEFAULT_WEIGHTS = { fuel: 1, ammo: 0.5, steel: 0.3, bauxite: 10, bucket: 200 }
+
+const weightOf = v => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null)
+
+/** 补齐缺失/非法的权重，负值与小数值都按「未设置」处理 */
+export const normalizeWeights = raw => {
+  const out = {}
+  for (const key of RESOURCE_KEYS) {
+    const given = weightOf(raw && raw[key])
+    out[key] = given == null ? DEFAULT_WEIGHTS[key] : given
+  }
+  return out
+}
+
+/**
+ * 一组资源向量按权重折成单个数。
+ * total 缺失（这个点位没填消耗）时返回 null —— 排序时空值一律沉底，
+ * 不能当成 0，否则「没填」会排到最前、看起来最省。
+ */
+export const weightedTotal = (total, weights) => {
+  if (!total || typeof total !== 'object') {
+    return null
+  }
+  const w = normalizeWeights(weights)
+  let sum = 0
+  let seen = false
+  for (const key of RESOURCE_KEYS) {
+    const value = total[key]
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      continue
+    }
+    sum += value * w[key]
+    seen = true
+  }
+  return seen ? sum : null
+}

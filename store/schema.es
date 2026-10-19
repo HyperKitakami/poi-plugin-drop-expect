@@ -5,7 +5,7 @@
   读取时逐字段校验，脏字段回落到安全值；连 id 都没有的元素直接丢弃。
 */
 
-import { normalizeCost } from '../calc/cost'
+import { normalizeCost, normalizeWeights } from '../calc/cost'
 
 export const DATA_VERSION = '1.0.0'
 
@@ -141,6 +141,7 @@ const sanitizeUi = raw => {
     mode: modes.includes(raw.mode) ? raw.mode : base.mode,
     sortKey: typeof raw.sortKey === 'string' ? raw.sortKey : base.sortKey,
     sortDesc: raw.sortDesc === true,
+    weights: normalizeWeights(raw.weights),
   }
 }
 

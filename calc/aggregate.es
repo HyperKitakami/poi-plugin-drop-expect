@@ -8,7 +8,7 @@
     all     集合「全部收集」：同上，用精确 DP
 */
 
-import { RESOURCE_KEYS, afford, maxSorties, perSortie, totalCost } from './cost'
+import { RESOURCE_KEYS, afford, maxSorties, perSortie, totalCost, weightedTotal } from './cost'
 import {
   ALL_DP_MAX_K,
   allN,
@@ -84,12 +84,41 @@ const reverseFor = ({ point, probAt, have }) => {
 
 const byKey = (dir = 1) => (a, b) => (a === b ? 0 : a < b ? -dir : dir)
 
-const sortRows = (rows, sortKey) => {
-  const key = sortKey === 'rate' ? 'rate' : sortKey === 'fuel' ? 'totalFuel' : 'n'
-  const dir = sortKey === 'rate' ? -1 : 1 // 掉落率越高越靠前
-  return rows.slice().sort((a, b) => {
-    const av = a[key] == null ? Infinity : a[key]
-    const bv = b[key] == null ? Infinity : b[key]
+/*
+  排序键：
+    n / rate           次数、掉落率
+    fuel…bucket        该资源的**总消耗**（五项都支持）
+    custom             按权重折算后的加权消耗
+*/
+export const SORT_KEYS = ['n', 'rate', 'fuel', 'ammo', 'steel', 'bauxite', 'bucket', 'custom']
+
+// 五项全 0 视为「还没填消耗」，不能当 0 排在最省——那比空着更误导
+const hasCost = row => !!row.total && RESOURCE_KEYS.some(key => row.total[key] > 0)
+
+// 空值（没填消耗 / 算不出次数）一律沉底
+const sortValue = (row, sortKey) => {
+  if (sortKey === 'n' || sortKey === 'rate') {
+    return row[sortKey]
+  }
+  if (!hasCost(row)) {
+    return null
+  }
+  return sortKey === 'custom' ? row.weighted : row.total[sortKey]
+}
+
+const sortRows = (rows, sortKey, weights) => {
+  const key = SORT_KEYS.includes(sortKey) ? sortKey : 'n'
+  // 加权值算一次就挂到行上：排序要用，界面也要显示「凭什么排第一」
+  const decorated =
+    key === 'custom'
+      ? rows.map(row => ({ ...row, weighted: hasCost(row) ? weightedTotal(row.total, weights) : null }))
+      : rows
+  const dir = key === 'rate' ? -1 : 1 // 掉落率越高越靠前，其余越小越靠前
+  return decorated.slice().sort((a, b) => {
+    const rawA = sortValue(a, key)
+    const rawB = sortValue(b, key)
+    const av = rawA == null || !Number.isFinite(rawA) ? Infinity : rawA
+    const bv = rawB == null || !Number.isFinite(rawB) ? Infinity : rawB
     if (av === bv) {
       return byKey(1)(a.order, b.order)
     }
@@ -207,14 +236,14 @@ export const buildSetRow = ({ point, shipIds, mode, probTarget, have, index = 0 
  *   single → { mode, groups: [{ shipId, rows }] }   targets 决定有哪些分组
  *   其他   → { mode, rows }                          集合成员取自各点位的 rates，targets 不参与
  */
-export const buildReport = ({ points, targets, mode, probTarget, have, sortKey = 'n' }) => {
+export const buildReport = ({ points, targets, mode, probTarget, have, sortKey = 'n', weights }) => {
   const shipIds = (targets || []).map(t => t.shipId)
   const usable = (points || []).filter(isPointUsable)
 
   if (mode === 'single') {
     const groups = []
     for (const shipId of shipIds) {
-      const rows = sortRows(buildShipRows({ points: usable, shipId, probTarget, have }), sortKey)
+      const rows = sortRows(buildShipRows({ points: usable, shipId, probTarget, have }), sortKey, weights)
       if (rows.length > 0) {
         groups.push({ shipId, rows })
       }
@@ -226,5 +255,5 @@ export const buildReport = ({ points, targets, mode, probTarget, have, sortKey =
   const rows = usable.map((point, index) =>
     buildSetRow({ point, shipIds: pointShipIds(point), mode, probTarget, have, index }),
   )
-  return { mode, groups: [], rows: sortRows(rows, sortKey) }
+  return { mode, groups: [], rows: sortRows(rows, sortKey, weights) }
 }

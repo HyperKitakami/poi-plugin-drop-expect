@@ -55,6 +55,11 @@ const ResourceCell = ({ remaining, total }) => {
           </div>
         )
       })}
+      {typeof weighted === 'number' && Number.isFinite(weighted) ? (
+        <div className={MUTED} style={{ fontSize: 11 }}>
+          {t('Weighted', '加权')}：{fmtWeighted(weighted)}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -154,7 +159,7 @@ const ShipGroup = ({ group, masterShips }) => {
                     <SortieCell row={row} />
                   </td>
                   <td>
-                    <ResourceCell remaining={row.remaining} total={row.total} />
+                    <ResourceCell remaining={row.remaining} total={row.total} weighted={row.weighted} />
                   </td>
                   <td>
                     <ReverseCell reverse={row.reverse} />
@@ -217,7 +222,7 @@ const SetTable = ({ rows, masterShips }) => (
                 <SortieCell row={row} />
               </td>
               <td>
-                <ResourceCell remaining={row.remaining} total={row.total} />
+                <ResourceCell remaining={row.remaining} total={row.total} weighted={row.weighted} />
               </td>
               <td>
                 <ReverseCell reverse={row.reverse} />

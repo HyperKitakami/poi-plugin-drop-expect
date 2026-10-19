@@ -21,7 +21,7 @@ const parse = text => {
   return Number.isFinite(n) ? n : null
 }
 
-const NumberInput = ({ value, onChange, placeholder, step = 'any', min, max, disabled, ariaLabel }) => {
+const NumberInput = ({ value, onChange, placeholder, step = 'any', min, max, disabled, ariaLabel, width = 140 }) => {
   const [draft, setDraft] = useState(toText(value))
   const external = typeof value === 'number' && Number.isFinite(value) ? value : null
 
@@ -59,7 +59,7 @@ const NumberInput = ({ value, onChange, placeholder, step = 'any', min, max, dis
       disabled={disabled}
       inputMode="decimal"
       aria-label={ariaLabel}
-      style={{ maxWidth: 140 }}
+      style={{ width, maxWidth: width }}
     />
   )
 }
