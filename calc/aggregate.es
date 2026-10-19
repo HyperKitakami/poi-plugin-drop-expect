@@ -84,6 +84,55 @@ const reverseFor = ({ point, probAt, have }) => {
 
 const byKey = (dir = 1) => (a, b) => (a === b ? 0 : a < b ? -dir : dir)
 
+/*
+  单舰口径下，各点位逐项比较：哪一行的某项资源最省、哪一行最贵。
+
+  返回 { [pointId]: { fuel: 'min'|'max', ... } }，只给需要标色的项。
+
+  三条克制的规则，都是为了避免「标得比实际知道的多」：
+  - 只比「有消耗数据」的行（total 为 null 的点位没填消耗，不参与）
+  - 值为 0 的不参与：0 既可能是「不花这项」，也可能是「没填」，当成最省会误导
+  - 某项在所有行上取值相同，就不标（全是最好等于没有比较）
+*/
+export const costExtremes = rows => {
+  const usable = (rows || []).filter(row => row && row.total)
+  const out = {}
+  if (usable.length < 2) {
+    return out
+  }
+  for (const key of RESOURCE_KEYS) {
+    let min = Infinity
+    let max = -Infinity
+    for (const row of usable) {
+      const value = row.total[key]
+      if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+        continue
+      }
+      if (value < min) {
+        min = value
+      }
+      if (value > max) {
+        max = value
+      }
+    }
+    if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) {
+      continue
+    }
+    for (const row of usable) {
+      const value = row.total[key]
+      const mark = value === min ? 'min' : value === max ? 'max' : null
+      if (!mark) {
+        continue
+      }
+      if (!out[row.pointId]) {
+        out[row.pointId] = {}
+      }
+      out[row.pointId][key] = mark
+    }
+  }
+  return out
+}
+
 const sortRows = (rows, sortKey) => {
   const key = sortKey === 'rate' ? 'rate' : sortKey === 'fuel' ? 'totalFuel' : 'n'
   const dir = sortKey === 'rate' ? -1 : 1 // 掉落率越高越靠前

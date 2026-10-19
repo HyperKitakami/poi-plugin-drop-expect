@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   buildReport,
   buildSetRow,
+  costExtremes,
   buildShipRows,
   isPointUsable,
   pointLabel,
@@ -266,4 +267,34 @@ test('集合口径：点位成员没填率才算集不齐', () => {
   })
   assert.equal(report.rows[0].reason, 'incomplete-set')
   assert.deepEqual(report.rows[0].missing, [72])
+})
+
+test('资源极值：逐项标出最低/最高，相同值不标', () => {
+  const rows = [
+    { pointId: 'a', total: { fuel: 100, ammo: 50, steel: 0, bauxite: 20, bucket: 1 } },
+    { pointId: 'b', total: { fuel: 300, ammo: 50, steel: 0, bauxite: 80, bucket: 3 } },
+  ]
+  assert.deepEqual(costExtremes(rows), {
+    a: { fuel: 'min', bauxite: 'min', bucket: 'min' },
+    b: { fuel: 'max', bauxite: 'max', bucket: 'max' },
+  })
+})
+
+test('资源极值：0 与缺失不参与比较', () => {
+  const rows = [
+    { pointId: 'a', total: { fuel: 0, ammo: 10, steel: 0, bauxite: 0, bucket: 0 } },
+    { pointId: 'b', total: { fuel: 200, ammo: 30, steel: 0, bauxite: 0, bucket: 0 } },
+    { pointId: 'c', total: null },
+  ]
+  // 钢/铝/桶全是 0（多半没填）→ 不标；油只有一边有值 → 也无从比较
+  assert.deepEqual(costExtremes(rows), { a: { ammo: 'min' }, b: { ammo: 'max' } })
+})
+
+test('资源极值：少于两行可比时不标', () => {
+  assert.deepEqual(costExtremes([]), {})
+  assert.deepEqual(
+    costExtremes([{ pointId: 'a', total: { fuel: 100, ammo: 1, steel: 1, bauxite: 1, bucket: 1 } }]),
+    {},
+  )
+  assert.deepEqual(costExtremes([{ pointId: 'a', total: null }, { pointId: 'b', total: null }]), {})
 })

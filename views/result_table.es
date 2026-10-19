@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Button, Callout, Card, Classes, Divider, Tag } from '@blueprintjs/core'
 
+import { costExtremes } from '../calc/aggregate'
 import { RESOURCE_LABEL, fmtBucket, fmtCount, fmtPercent } from './format'
 import { resolveShipName } from './selectors'
 import { ACCENT_COLOR } from './theme'
@@ -20,6 +21,7 @@ import { t } from './i18n'
 */
 
 const DANGER = Classes.TEXT_DANGER || 'bp6-text-danger'
+const SUCCESS = Classes.TEXT_SUCCESS || 'bp6-text-success'
 const MUTED = 'bp6-text-muted'
 const ORDER = ['fuel', 'ammo', 'steel', 'bauxite', 'bucket']
 
@@ -37,7 +39,7 @@ const fmtValue = (value, key) => {
   return value < 0 ? `-${text}` : text
 }
 
-const ResourceCell = ({ remaining, total }) => {
+const ResourceCell = ({ remaining, total, extremes }) => {
   if (!remaining || !total) {
     return <span className={MUTED}>—</span>
   }
@@ -45,11 +47,17 @@ const ResourceCell = ({ remaining, total }) => {
     <div>
       {ORDER.map(key => {
         const left = remaining[key]
+        const mark = extremes ? extremes[key] : null
         return (
           <div key={key} style={{ fontSize: 11, whiteSpace: 'nowrap' }}>
             <span style={{ display: 'inline-block', width: 14 }}>{RESOURCE_LABEL[key]}</span>
             <span className={MUTED}>{t('Spent', '消耗')}：</span>
-            {fmtValue(total[key], key)}
+            <span
+              className={mark === 'min' ? SUCCESS : mark === 'max' ? DANGER : undefined}
+              title={mark === 'min' ? t('Lowest cost', '本舰各点位中最低') : mark === 'max' ? t('Highest cost', '本舰各点位中最高') : undefined}
+            >
+              {fmtValue(total[key], key)}
+            </span>
             <span className={MUTED}> → {t('Left', '剩余')}：</span>
             <span className={left < 0 ? DANGER : undefined}>{fmtValue(left, key)}</span>
           </div>
@@ -96,6 +104,8 @@ const ShipGroup = ({ group, masterShips }) => {
   const best = group.rows[0]
   // 默认折叠：一艘船一个点位对比表，目标一多整页会很长
   const [open, setOpen] = useState(false)
+  // 逐项比较各点位的消耗，标出最低/最高
+  const extremes = useMemo(() => costExtremes(group.rows), [group.rows])
 
   return (
     <Card style={{ marginTop: 8 }}>
@@ -154,7 +164,11 @@ const ShipGroup = ({ group, masterShips }) => {
                     <SortieCell row={row} />
                   </td>
                   <td>
-                    <ResourceCell remaining={row.remaining} total={row.total} />
+                    <ResourceCell
+                      remaining={row.remaining}
+                      total={row.total}
+                      extremes={extremes[row.pointId]}
+                    />
                   </td>
                   <td>
                     <ReverseCell reverse={row.reverse} />
@@ -163,6 +177,11 @@ const ShipGroup = ({ group, masterShips }) => {
               ))}
             </tbody>
           </table>
+          {group.rows.length > 1 ? (
+            <div className={MUTED} style={{ fontSize: 11, marginTop: 4 }}>
+              {t('Cost extremes hint', '资源按项比较各点位：绿色为该舰最低，红色为最高')}
+            </div>
+          ) : null}
         </>
       ) : null}
     </Card>
