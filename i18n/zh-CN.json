@@ -41,8 +41,6 @@
   "Point": "点位",
   "Drop rate": "掉落率",
   "Sorties": "所需次数",
-  "Remaining": "剩余资源",
-  "Total spent": "共消耗",
   "Y axis": "纵轴",
   "Curve no target": "先在「点位与目标舰」页添加目标舰，再回来看曲线。",
   "Curve no rate": "这艘船还没有任何点位填写掉落率，无法画曲线。",
@@ -78,5 +76,10 @@
   "Search ship by name / kana / id": "输入舰名、假名或 ID 搜索",
   "No match": "没有匹配的舰船。",
   "Target expectation": "目标期望",
-  "expectation": "期望"
+  "expectation": "期望",
+  "Resources": "资源",
+  "Spent": "消耗",
+  "Left": "剩余",
+  "Collapse": "折叠",
+  "Expand": "展开"
 }
