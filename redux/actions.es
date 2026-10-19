@@ -15,6 +15,7 @@ export const TARGET_REMOVE = `${PREFIX}TARGET_REMOVE`
 export const RATE_SET = `${PREFIX}RATE_SET`
 export const RATE_CLEAR = `${PREFIX}RATE_CLEAR`
 export const RATE_LINK = `${PREFIX}RATE_LINK`
+export const RATE_LOCK = `${PREFIX}RATE_LOCK`
 export const HAVE_SET = `${PREFIX}HAVE_SET`
 export const UI_SET = `${PREFIX}UI_SET`
 export const P_STATE_READY = `${PREFIX}P_STATE_READY`
@@ -66,6 +67,19 @@ export const clearRate = (pointId, shipId) => ({ type: RATE_CLEAR, pointId, ship
  * 抓取列表里手选、或从全局清单里挑进来时用它，之后由 RATE_SET 补值。
  */
 export const linkRate = (pointId, shipId) => ({ type: RATE_LINK, pointId, shipId })
+
+/**
+ * 锁定/解锁某艘船在该点位上的掉落率。
+ *
+ * 锁定是「值受保护」：抓取不会覆盖、输入框不能改、也不能把这条从点位里删掉。
+ * 只有本 action 能解开——这是唯一的口子，别在别处顺手写 locked。
+ */
+export const setRateLock = (pointId, shipId, locked) => ({
+  type: RATE_LOCK,
+  pointId,
+  shipId,
+  locked: locked === true,
+})
 
 /** manual=true 表示用户手改过，此后不再从 poi 自动同步 */
 export const setHave = (patch, manual = true) => ({ type: HAVE_SET, patch, manual })

@@ -17,6 +17,7 @@ import {
   POINT_UPDATE,
   RATE_CLEAR,
   RATE_LINK,
+  RATE_LOCK,
   RATE_SET,
   TARGET_ADD,
   TARGET_REMOVE,
@@ -114,6 +115,12 @@ const dropRate = (point, shipId) => {
   return { ...point, rates }
 }
 
+/** 锁定的条目受保护：不能改、不能删，只有 RATE_LOCK 能解开 */
+const isRateLocked = (point, shipId) => {
+  const entry = point.rates && point.rates[shipId]
+  return !!(entry && entry.locked === true)
+}
+
 export function reducer(state = initState, action, rootState) {
   const current = isShaped(state) ? state : normalize(state)
   const type = action && action.type
@@ -182,7 +189,12 @@ export function reducer(state = initState, action, rootState) {
       if (!Number.isInteger(shipId) || shipId <= 0) {
         return current
       }
-      if (!current.points.some(p => p.id === pointId)) {
+      const point = current.points.find(p => p.id === pointId)
+      if (!point) {
+        return current
+      }
+      // 手填、抓取回写、候选加入都走 RATE_SET，锁在这个口子上就不用各处去拦
+      if (isRateLocked(point, shipId)) {
         return current
       }
       return {
@@ -212,12 +224,39 @@ export function reducer(state = initState, action, rootState) {
 
     case RATE_CLEAR: {
       const { pointId, shipId } = action
-      if (!current.points.some(p => p.id === pointId)) {
+      const point = current.points.find(p => p.id === pointId)
+      if (!point || isRateLocked(point, shipId)) {
         return current
       }
       return {
         ...current,
         points: current.points.map(p => (p.id === pointId ? dropRate(p, shipId) : p)),
+      }
+    }
+
+    case RATE_LOCK: {
+      const { pointId, shipId, locked } = action
+      if (!Number.isInteger(shipId) || shipId <= 0) {
+        return current
+      }
+      const exists = current.points.some(p => p.id === pointId && p.rates && p.rates[shipId])
+      if (!exists) {
+        return current
+      }
+      return {
+        ...current,
+        points: current.points.map(p => {
+          if (p.id !== pointId || !p.rates || !p.rates[shipId]) {
+            return p
+          }
+          const entry = { ...p.rates[shipId] }
+          if (locked) {
+            entry.locked = true
+          } else {
+            delete entry.locked
+          }
+          return { ...p, rates: { ...p.rates, [shipId]: entry } }
+        }),
       }
     }
 

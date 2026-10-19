@@ -57,6 +57,32 @@ test('掉落率：只留合法条目，来源缺省为 manual', () => {
   assert.equal(rates[71].timeRange.length, 2)
 })
 
+test('掉落率锁定：只认 true，且能随存档往返', () => {
+  const state = sanitizePState({
+    points: [
+      {
+        id: 'p',
+        mapId: '2-2',
+        cell: 'B',
+        rates: {
+          71: { rate: 0.01, locked: true },
+          72: { rate: 0.02, locked: 'yes' },
+          73: { rate: 0.03, locked: false },
+        },
+      },
+    ],
+  })
+  const rates = state.points[0].rates
+  assert.equal(rates[71].locked, true)
+  assert.equal(rates[72].locked, undefined, '非布尔真值不算锁定')
+  assert.equal(rates[73].locked, undefined, 'false 不落盘')
+
+  // 写盘再读回来，锁不能丢（sanitize 是白名单，漏字段就会被静默抹掉）
+  const round = sanitizePState(JSON.parse(JSON.stringify(toPState(state))))
+  assert.equal(round.points[0].rates[71].locked, true)
+  assert.equal(round.points[0].rates[71].rate, 0.01)
+})
+
 test('点位标签：去空白、截到 10 字、去重、最多 5 个', () => {
   const state = sanitizePState({
     points: [

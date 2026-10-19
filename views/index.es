@@ -16,6 +16,7 @@ import {
   removeTarget,
   setHave,
   setRate,
+  setRateLock,
   setUi,
   updatePoint,
 } from '../redux/actions'
@@ -142,6 +143,7 @@ const PanelContent = () => {
     手填优先（D6）：source === 'manual' 的条目默认跳过，只有在用户
     明确选择「覆盖」时才写。抓取只更新「全局目标舰」在本点位上的率，
     不认识的舰名不猜、不落库。
+    锁定的条目一律不碰，连「覆盖手填」的确认都不给——锁定就是锁定。
   */
   const handleFetchRates = useCallback(
     async (point, { overwriteManual } = {}) => {
@@ -158,6 +160,7 @@ const PanelContent = () => {
       const members = point.rates || {}
       let applied = 0
       let skipped = 0
+      let locked = 0
       let missingCount = 0
 
       for (const key of Object.keys(members)) {
@@ -167,6 +170,10 @@ const PanelContent = () => {
           continue
         }
         const existing = members[key]
+        if (existing && existing.locked === true) {
+          locked += 1
+          continue
+        }
         if (existing && existing.source === 'manual' && !overwriteManual) {
           skipped += 1
           continue
@@ -183,6 +190,7 @@ const PanelContent = () => {
       return {
         applied,
         skipped,
+        locked,
         missingCount,
         totalCount: data.totalCount,
         timeRange: data.timeRange,
@@ -466,6 +474,7 @@ const PanelContent = () => {
             fcdMap={fcdMap}
             onChange={patch => dispatch(updatePoint(point.id, patch))}
             onRate={(shipId, rate) => dispatch(setRate(point.id, shipId, rate))}
+            onLock={(shipId, locked) => dispatch(setRateLock(point.id, shipId, locked))}
             onRemoveMember={shipId => dispatch(clearRate(point.id, shipId))}
             onLinkTarget={shipId => dispatch(linkRate(point.id, shipId))}
             onAddShip={shipId => {

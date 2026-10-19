@@ -146,24 +146,39 @@ const describeError = error => {
 
 const describeFetch = summary => {
   const window = fmtWindow(summary.timeRange)
+  // 锁定条目不写入，但必须让用户知道「不是没抓到，是锁着」
+  const lockedText =
+    summary.locked > 0
+      ? t('Locked skipped', '{0} 艘已锁定，未覆盖').replace('{0}', summary.locked)
+      : ''
   if (summary.applied === 0) {
     if (summary.candidateCount > 0) {
       return {
         intent: 'primary',
-        text: `已取回 ${summary.totalCount} 条样本、${summary.candidateCount} 艘可选舰船，见下方列表。`,
+        text: `已取回 ${summary.totalCount} 条样本、${summary.candidateCount} 艘可选舰船，见下方列表。${
+          lockedText ? `（${lockedText}）` : ''
+        }`,
       }
     }
     if (summary.missingCount > 0) {
       return {
         intent: 'warning',
-        text: `样本 ${summary.totalCount} 条，但没有匹配到你的目标舰（${summary.unmatchedCount} 个舰名未能对上舰娘）。`,
+        text: `样本 ${summary.totalCount} 条，但没有匹配到你的目标舰（${summary.unmatchedCount} 个舰名未能对上舰娘）。${
+          lockedText ? `（${lockedText}）` : ''
+        }`,
       }
+    }
+    if (lockedText) {
+      return { intent: 'warning', text: t('All locked', '本点位的目标舰已全部锁定，解锁后才能抓取覆盖。') }
     }
     return { intent: 'warning', text: '没有可写入的数据。' }
   }
   let text = `已更新 ${summary.applied} 艘（样本 ${summary.totalCount}${window ? `，窗口 ${window}` : ''}）`
   if (summary.skipped > 0) {
     text += `；${summary.skipped} 艘手填值已保留`
+  }
+  if (lockedText) {
+    text += `；${lockedText}`
   }
   if (summary.candidateCount > 0) {
     text += `；另有 ${summary.candidateCount} 艘可在下方手选加入`
@@ -203,6 +218,7 @@ const PointCard = ({
   fcdMap,
   onChange,
   onRate,
+  onLock,
   onRemoveMember,
   onLinkTarget,
   onAddShip,
@@ -335,7 +351,9 @@ const PointCard = ({
     if (fetching || !onFetch) {
       return
     }
-    const manualCount = members.filter(item => item.entry.source === 'manual').length
+    const manualCount = members.filter(
+      item => item.entry.source === 'manual' && item.entry.locked !== true,
+    ).length
     const overwriteManual =
       manualCount > 0
         ? window.confirm(
@@ -591,35 +609,59 @@ const PointCard = ({
                   <th>{t('Target ship', '目标舰')}</th>
                   <th style={{ width: 140 }}>{t('Drop rate', '掉落率')} (%)</th>
                   <th>{t('Source', '来源')}</th>
+                  <th style={{ width: 36 }}>{t('Lock', '锁')}</th>
                   <th style={{ width: 40 }} />
                 </tr>
               </thead>
               <tbody>
-                {members.map(({ shipId, entry }) => (
-                  <tr key={shipId}>
-                    <td>{resolveShipName(masterShips, shipId)}</td>
-                    <td>
-                      <NumberInput
-                        value={toPercent(entry.rate)}
-                        min={0}
-                        max={100}
-                        onChange={value => onRate(shipId, value == null ? null : value / 100)}
-                        placeholder={t('not set', '未设置')}
-                        ariaLabel={`rate-${shipId}`}
-                      />
-                    </td>
-                    <td>{sourceTag(entry)}</td>
-                    <td>
-                      <Button
-                        minimal
-                        small
-                        icon="cross"
-                        aria-label={t('Remove', '移除')}
-                        onClick={() => onRemoveMember(shipId)}
-                      />
-                    </td>
-                  </tr>
-                ))}
+                {members.map(({ shipId, entry }) => {
+                  // 锁定 = 这条值受保护：输入框不可改、抓取不覆盖、也不让删
+                  const locked = entry.locked === true
+                  return (
+                    <tr key={shipId}>
+                      <td>{resolveShipName(masterShips, shipId)}</td>
+                      <td>
+                        <NumberInput
+                          value={toPercent(entry.rate)}
+                          min={0}
+                          max={100}
+                          disabled={locked}
+                          onChange={value => onRate(shipId, value == null ? null : value / 100)}
+                          placeholder={t('not set', '未设置')}
+                          ariaLabel={`rate-${shipId}`}
+                        />
+                      </td>
+                      <td>{sourceTag(entry)}</td>
+                      <td>
+                        <Button
+                          minimal
+                          small
+                          active={locked}
+                          intent={locked ? 'warning' : undefined}
+                          icon={locked ? 'lock' : 'unlock'}
+                          title={
+                            locked
+                              ? t('Unlock rate', '解锁后才能修改或被抓取覆盖')
+                              : t('Lock rate', '锁定后抓取与手改都需要先解锁')
+                          }
+                          aria-label={locked ? t('Unlock rate', '解锁后才能修改或被抓取覆盖') : t('Lock rate', '锁定后抓取与手改都需要先解锁')}
+                          onClick={() => onLock && onLock(shipId, !locked)}
+                        />
+                      </td>
+                      <td>
+                        <Button
+                          minimal
+                          small
+                          icon="cross"
+                          disabled={locked}
+                          title={locked ? t('Locked cannot remove', '已锁定，先解锁再移除') : undefined}
+                          aria-label={t('Remove', '移除')}
+                          onClick={() => onRemoveMember(shipId)}
+                        />
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           )}

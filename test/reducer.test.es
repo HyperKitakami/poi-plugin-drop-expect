@@ -12,6 +12,7 @@ import {
   removeTarget,
   setHave,
   setRate,
+  setRateLock,
   updatePoint,
 } from '../redux/actions.es'
 
@@ -100,6 +101,45 @@ test('掉落率：写入、来源、超界截断、非法值忽略、清除', ()
 
   state = reducer(state, clearRate(pointId, 71))
   assert.equal(state.points[0].rates[71], undefined)
+})
+
+test('锁定：锁住的掉落率不能被写、被清，解锁后恢复可写', () => {
+  let state = reducer(base(), addPoint({ mapId: '2-2', cell: 'B' }))
+  const id = state.points[0].id
+
+  state = reducer(state, setRate(id, 71, 0.05))
+  state = reducer(state, setRateLock(id, 71, true))
+  assert.equal(state.points[0].rates[71].locked, true)
+  assert.equal(state.points[0].rates[71].rate, 0.05, '锁定本身不改值')
+
+  // 抓取回写与手改走的是同一个 RATE_SET
+  state = reducer(state, setRate(id, 71, 0.09, { source: 'kcwiki', sampleSize: 100 }))
+  assert.equal(state.points[0].rates[71].rate, 0.05, '锁定后抓取写不进去')
+  assert.equal(state.points[0].rates[71].source, 'manual')
+  assert.equal(state.points[0].rates[71].sampleSize, undefined)
+
+  state = reducer(state, setRate(id, 71, null))
+  assert.equal(state.points[0].rates[71].rate, 0.05, '锁定后也不能清成占位')
+
+  state = reducer(state, clearRate(id, 71))
+  assert.ok(state.points[0].rates[71], '锁定后不能移除')
+
+  state = reducer(state, setRateLock(id, 71, false))
+  assert.equal(state.points[0].rates[71].locked, undefined, '解锁不写 locked:false')
+  state = reducer(state, setRate(id, 71, 0.09))
+  assert.equal(state.points[0].rates[71].rate, 0.09, '解锁后可写')
+})
+
+test('锁定：不存在的条目/点位是空操作，占位条目也能锁', () => {
+  let state = reducer(base(), addPoint({ mapId: '2-2', cell: 'B' }))
+  const id = state.points[0].id
+
+  assert.equal(reducer(state, setRateLock(id, 71, true)), state, '没这条就什么都不做')
+  assert.equal(reducer(state, setRateLock('nope', 71, true)), state)
+
+  state = reducer(state, linkRate(id, 71))
+  const locked = reducer(state, setRateLock(id, 71, true))
+  assert.equal(locked.points[0].rates[71].locked, true, '占位也能锁，用来挡住抓取自动填值')
 })
 
 test('点位标签可以改，且不会被其他 patch 冲掉', () => {

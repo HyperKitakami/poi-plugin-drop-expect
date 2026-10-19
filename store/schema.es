@@ -63,6 +63,10 @@ const sanitizeRates = raw => {
     if (typeof value.fetchedAt === 'number' && Number.isFinite(value.fetchedAt)) {
       entry.fetchedAt = value.fetchedAt
     }
+    // 锁定：只认 true。不锁就不写这个字段，存档里不出现一堆 locked:false
+    if (value.locked === true) {
+      entry.locked = true
+    }
     out[shipId] = entry
   }
   return out
