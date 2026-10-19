@@ -3,13 +3,16 @@ import { Button, Callout, Card, Divider, HTMLSelect, InputGroup, Tag } from '@bl
 
 import { getMapOptions, getShipOptions, getSpotOptions, isEventArea, resolveShipName, shipMatchesQuery } from './selectors'
 import { NumberInput } from './number_input'
+import { ACCENT_COLOR } from './theme'
 import { t } from './i18n'
 
 /*
   点位卡片。
 
-  一个点位 = 一张卡：表头（备注/折叠/删除）+ 折叠区（海域与目标点、该点位的目标舰、
-  掉落率抓取、单次消耗、消耗估算）。
+  一个点位 = 一张卡：表头（折叠 / 标题 / 艘数 / 备注 / 删除）+ 折叠区（海域与目标点、
+  该点位的目标舰、掉落率抓取、单次消耗、消耗估算）。
+
+  标题用与结果页舰名同一个强调色（views/theme.es），两页的「标题」是同一语义。
 
   「目标舰」的归属靠 point.rates 的键决定：有键 = 已加入本点位（rate 可能是 null，
   表示加入了但还没填率）。全局 targets 只是候选池，两处通过 linkRate 打通。
@@ -331,21 +334,21 @@ const PointCard = ({
           aria-label={open ? t('Collapse', '折叠') : t('Expand', '展开')}
           onClick={() => setOpen(value => !value)}
         />
-        <b style={{ fontSize: 13 }}>{pointTitle(point)}</b>
-        <InputGroup
-          value={point.note || ''}
-          placeholder={t('Note', '备注（便于区分）')}
-          style={{ width: 160 }}
-          onChange={e => onChange({ note: e.target.value })}
-        />
+        <b style={{ color: ACCENT_COLOR, fontSize: 13 }}>{pointTitle(point)}</b>
         <Tag minimal>
           {members.length} {t('ships', '艘')}
         </Tag>
+        {/* 备注靠右、紧跟删除按钮：它是对整张卡的补充说明，不属于标题信息 */}
+        <InputGroup
+          value={point.note || ''}
+          placeholder={t('Note', '备注（便于区分）')}
+          style={{ width: 180, marginLeft: 'auto' }}
+          onChange={e => onChange({ note: e.target.value })}
+        />
         <Button
           minimal
           intent="danger"
           icon="trash"
-          style={{ marginLeft: 'auto' }}
           onClick={onRemove}
           aria-label={t('Delete point', '删除点位')}
         />

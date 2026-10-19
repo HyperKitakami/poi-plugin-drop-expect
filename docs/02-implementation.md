@@ -298,7 +298,8 @@ poi-plugin-drop-expect/
 │   ├── curve_panel.es    曲线页：目标舰与纵轴选择 + 端点数值表
 │   ├── expect_curve_chart.es 多序列曲线（每点位一条）
 │   ├── format.es         数字格式化
-│   ├── point_editor.es   点位表单
+│   ├── theme.es          强调色 ACCENT_COLOR（结果页舰名与点位标题共用）
+│   ├── point_editor.es   点位卡片（表头折叠/标题/备注/删除，可折叠主体）
 │   ├── target_list.es    目标舰搜索/添加
 │   ├── number_input.es   带草稿的数字输入
 │   ├── error_boundary.es 渲染兜底

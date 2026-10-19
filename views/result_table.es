@@ -3,6 +3,7 @@ import { Button, Callout, Card, Classes, Divider, Tag } from '@blueprintjs/core'
 
 import { RESOURCE_LABEL, fmtBucket, fmtCount, fmtPercent } from './format'
 import { resolveShipName } from './selectors'
+import { ACCENT_COLOR } from './theme'
 import { t } from './i18n'
 
 /*
@@ -14,11 +15,10 @@ import { t } from './i18n'
   资源列五行列出「消耗 → 剩余」，负数标红——
   比「总共要花多少」更直接：一眼能看出哪项会先见底。
 
-  目标舰标头用 #6CF：这是用户指定的强调色，与主题无关；
+  目标舰标头用 ACCENT_COLOR（#6CF），与设定页的点位标题同色；
   最优标记用 success 绿，和「来自 poi」同一套语义色。
 */
 
-const SHIP_TITLE_COLOR = '#6CF'
 const DANGER = Classes.TEXT_DANGER || 'bp6-text-danger'
 const MUTED = 'bp6-text-muted'
 const ORDER = ['fuel', 'ammo', 'steel', 'bauxite', 'bucket']
@@ -103,7 +103,7 @@ const ShipGroup = ({ group, masterShips }) => {
           aria-label={open ? t('Collapse', '折叠') : t('Expand', '展开')}
           onClick={() => setOpen(value => !value)}
         />
-        <b style={{ color: SHIP_TITLE_COLOR, fontSize: 13 }}>
+        <b style={{ color: ACCENT_COLOR, fontSize: 13 }}>
           {resolveShipName(masterShips, group.shipId)}
         </b>
         <Tag minimal>
