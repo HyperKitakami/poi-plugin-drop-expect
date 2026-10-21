@@ -107,7 +107,7 @@ const CurvePanel = ({ targets, points, masterShips, probTarget }) => {
         </div>
 
         <Tag minimal style={{ marginBottom: 6 }}>
-          {t('expectation', '期望')} {fmtPercent(probTarget, 0)}
+          {t('confidence', '把握')} {fmtPercent(probTarget, 0)}
         </Tag>
       </div>
 
@@ -153,7 +153,7 @@ const CurvePanel = ({ targets, points, masterShips, probTarget }) => {
           <div className="bp6-text-muted" style={{ fontSize: 11, marginTop: 6, lineHeight: 1.6 }}>
             {t(
               'Curve note',
-              '横轴是目标期望，纵轴是达到该期望所需的量；竖虚线是当前期望。',
+              '横轴是目标把握，纵轴是达到该把握所需的量；竖虚线是当前把握。',
             )}
           </div>
         </>

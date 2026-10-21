@@ -78,7 +78,7 @@ const WEIGHT_KEYS = ['fuel', 'ammo', 'steel', 'bauxite', 'bucket']
 
 const TABS = [
   { id: 'result', label: '计算结果' },
-  { id: 'curve', label: '期望曲线' },
+  { id: 'curve', label: '把握曲线' },
   { id: 'config', label: '点位与目标舰' },
 ]
 
@@ -288,7 +288,7 @@ const PanelContent = () => {
       <Panel active={tab === 'result'}>
         <Card>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <Labeled label={t('Target expectation', '目标期望')}>
+            <Labeled label={t('Target confidence', '目标把握')}>
               <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                 <NumberInput
                   value={Number((probTarget * 100).toFixed(2))}

@@ -1,12 +1,12 @@
 import React, { useMemo } from 'react'
 
 /*
-  多条期望曲线叠在一张图上（每个点位一条）。
+  多条把握曲线叠在一张图上（每个点位一条）。
 
   尺寸按「看得清」定：viewBox 560×300，配合 width:100% / height:auto，
   在侧栏里会按容器宽度等比放大，而不是固定 360×176 那种缩略图。
 
-  竖虚线画三条：50%、90%、当前期望（设定值与前两者重合时只画一条）。
+  竖虚线画三条：50%、90%、当前把握（设定值与前两者重合时只画一条）。
   标签**只标在横轴刻度上**，不跟在虚线旁边——
   跟在旁边时，自定义值（比如 93%）的标签会和 90% 的标签挤在一起。
   自定义值本身在页面顶部的标签里已经有了，图上不必重复。
@@ -57,7 +57,7 @@ const ExpectCurveChart = ({ series, format, probTarget = 0.9 }) => {
         .join(''),
     )
 
-    // 虚线：50%、90% 是参考，当前期望加粗；同一位置只留一条（加粗优先）
+    // 虚线：50%、90% 是参考，当前把握加粗；同一位置只留一条（加粗优先）
     const guideMap = new Map()
     for (const guide of [...BASE_GUIDES.map(t => ({ t, strong: false })), { t: probTarget, strong: true }]) {
       if (!(guide.t > tMin && guide.t < tMax)) {
