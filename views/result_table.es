@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
-import { Button, Callout, Card, Classes, Divider, Tag, Tooltip } from '@blueprintjs/core'
+import { Button, Callout, Card, Divider, Tag, Tooltip } from '@blueprintjs/core'
 
 import { RESOURCE_LABEL, fmtBucket, fmtCount, fmtPercent, fmtWeighted } from './format'
 import { resolveShipName } from './selectors'
-import { ACCENT_COLOR } from './theme'
+import { ACCENT_COLOR, DANGER_CLASS } from './theme'
 import { t } from './i18n'
 
 /*
@@ -19,7 +19,6 @@ import { t } from './i18n'
   最优标记用 success 绿，和「来自 poi」同一套语义色。
 */
 
-const DANGER = Classes.TEXT_DANGER || 'bp6-text-danger'
 const MUTED = 'bp6-text-muted'
 const ORDER = ['fuel', 'ammo', 'steel', 'bauxite', 'bucket']
 
@@ -51,7 +50,7 @@ const ResourceCell = ({ remaining, total, weighted }) => {
             <span className={MUTED}>{t('Spent', '消耗')}：</span>
             {fmtValue(total[key], key)}
             <span className={MUTED}> → {t('Left', '剩余')}：</span>
-            <span className={left < 0 ? DANGER : undefined}>{fmtValue(left, key)}</span>
+            <span className={left < 0 ? DANGER_CLASS : undefined}>{fmtValue(left, key)}</span>
           </div>
         )
       })}

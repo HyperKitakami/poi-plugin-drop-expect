@@ -40,6 +40,7 @@ import { PointCard } from './point_editor'
 import { ResultTable } from './result_table'
 import { TargetList } from './target_list'
 import { ErrorBoundary } from './error_boundary'
+import { DANGER_STYLE } from './theme'
 import { t } from './i18n'
 
 const HAVE_FIELDS = [
@@ -502,6 +503,8 @@ const PanelContent = () => {
 
 const DropExpectMain = () => (
   <ErrorBoundary>
+    {/* 危险色只有 CSS 级联能做到主题感知，类名本身说明不了颜色 */}
+    <style dangerouslySetInnerHTML={{ __html: DANGER_STYLE }} />
     <PanelContent />
   </ErrorBoundary>
 )
