@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Button, Callout, Card, Classes, Divider, Tag } from '@blueprintjs/core'
+import { Button, Callout, Card, Classes, Divider, Tag, Tooltip } from '@blueprintjs/core'
 
 import { RESOURCE_LABEL, fmtBucket, fmtCount, fmtPercent, fmtWeighted } from './format'
 import { resolveShipName } from './selectors'
@@ -87,6 +87,48 @@ const ReverseCell = ({ reverse }) => {
   )
 }
 
+/*
+  表头「反算」后缀一个小问号，悬浮给出这一列的口径。
+
+  列里是「次数 + 把握 + 瓶颈」三件事，表头放不下，也不该为它撑高行高，
+  所以只留一个可悬浮的问号。问号用纯 CSS 圆形而不是 Icon 组件：
+  Blueprint 的图标尺寸属性在 4/5/6 之间改过名（iconSize → size），
+  这里没必要为了一个字形去猜版本。
+*/
+const ReverseHeader = () => {
+  const hint = t(
+    'Reverse hint',
+    '现有资源最多还能刷多少次，以及这些次数能达到的把握；括号里是卡住的那项资源。',
+  )
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+      {t('Reverse', '反算')}
+      <Tooltip content={hint} placement="top" hoverOpenDelay={120}>
+        <span
+          tabIndex={0}
+          role="img"
+          aria-label={hint}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 13,
+            height: 13,
+            borderRadius: '50%',
+            border: '1px solid currentColor',
+            fontSize: 10,
+            lineHeight: 1,
+            opacity: 0.5,
+            cursor: 'help',
+          }}
+        >
+          ?
+        </span>
+      </Tooltip>
+    </span>
+  )
+}
+
 const ReasonText = ({ row }) =>
   row.reason === 'incomplete-set'
     ? t('Incomplete set', '该点位有 {0} 艘目标舰未填写掉落率，无法集齐').replace(
@@ -160,7 +202,7 @@ const ShipGroup = ({ group, masterShips }) => {
                 <th>{t('Drop rate', '掉落率')}</th>
                 <th>{t('Sorties', '所需次数')}</th>
                 <th>{t('Resources', '资源')}</th>
-                <th>{t('Reverse', '反算')}</th>
+                <th><ReverseHeader /></th>
               </tr>
             </thead>
             <tbody>
@@ -208,7 +250,7 @@ const SetTable = ({ rows, masterShips }) => (
           <th>{t('Point', '点位')}</th>
           <th>{t('Sorties', '所需次数')}</th>
           <th>{t('Resources', '资源')}</th>
-          <th>{t('Reverse', '反算')}</th>
+          <th><ReverseHeader /></th>
         </tr>
       </thead>
       <tbody>
