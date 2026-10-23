@@ -1,7 +1,7 @@
 {
   "name": "poi-plugin-drop-expect",
   "version": "0.1.0",
-  "description": "Drop probability and resource budget calculator for ship farming",
+  "description": "Drop probability and resource budget calculator for Kancolle ship farming, as a poi plugin.",
   "main": "index.es",
   "files": [
     "calc/",
@@ -11,18 +11,34 @@
     "views/",
     "i18n/",
     "index.es",
-    "README.md"
+    "CHANGELOG.md"
   ],
   "scripts": {
-    "test": "node --import ./test/loader.mjs --test test/probability.test.es test/cost.test.es test/aggregate.test.es test/curve.test.es test/format.test.es test/kcwiki.test.es test/wmfg.test.es test/selectors.test.es test/reducer.test.es test/schema.test.es test/p-state.test.es test/i18n.test.es"
+    "test": "node --import ./test/loader.mjs --test test/probability.test.es test/cost.test.es test/aggregate.test.es test/curve.test.es test/format.test.es test/kcwiki.test.es test/wmfg.test.es test/selectors.test.es test/reducer.test.es test/schema.test.es test/p-state.test.es test/i18n.test.es",
+    "prepublishOnly": "npm test"
   },
   "keywords": [
     "kancolle",
+    "kan-colle",
     "poi",
-    "poi-plugin"
+    "poi-plugin",
+    "drop-rate",
+    "farming",
+    "calculator"
   ],
-  "author": "HyperKitakami",
+  "author": {
+    "name": "HyperKitakami",
+    "url": "https://github.com/HyperKitakami"
+  },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HyperKitakami/poi-plugin-drop-expect.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HyperKitakami/poi-plugin-drop-expect/issues"
+  },
+  "homepage": "https://github.com/HyperKitakami/poi-plugin-drop-expect#readme",
   "poiPlugin": {
     "title": "Drop Expect",
     "description": "掉落期望与资源预算计算",

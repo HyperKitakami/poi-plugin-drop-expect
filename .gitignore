@@ -3,6 +3,9 @@ node_modules/
 .tmp-check/
 *.tmp
 
+# npm pack 产物
+*.tgz
+
 # 参考资料：第三方仓库快照（含各自的 .git），只用于本地分析，不入库。
 # 其中两个是他人项目，另一个是被重写的旧实现；保留原样、不修改、不提交。
 docs/references/

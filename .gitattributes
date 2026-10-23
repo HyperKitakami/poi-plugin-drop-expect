@@ -1,0 +1,12 @@
+* text=auto eol=lf
+
+# 源码与文档统一 LF，避免 Windows 上提交出 CRLF 造成整文件 diff
+*.es    text eol=lf
+*.mjs   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+
+*.png   binary
+*.jpg   binary
+*.tgz   binary
