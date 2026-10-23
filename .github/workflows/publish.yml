@@ -1,0 +1,42 @@
+name: Publish
+
+# 用可信发布（trusted publishing / OIDC）发版，不需要把 token 存在仓库里。
+#
+# 一次性前置（在 npmjs.com 网页上做）：
+#   Packages → poi-plugin-drop-expect → Settings → Trusted publisher
+#   → GitHub Actions，填：
+#       Organization or user : HyperKitakami
+#       Repository           : poi-plugin-drop-expect
+#       Workflow filename    : publish.yml   （只写文件名，大小写敏感）
+#
+# 配好之后，把下面的 workflow_dispatch 换成 tag 触发：
+#   on:
+#     push:
+#       tags: ['v*']
+# 这样 `git push --tags` 就会自动发版，并自动生成 provenance（无需 --provenance）。
+#
+# 注意：可信发布要求 npm CLI ≥ 11.5.1（node 22.14+ 自带），所以这里用 node 24。
+# package.json 的 repository.url 必须与仓库地址完全一致，否则 OIDC 校验会失败。
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write # OIDC，可信发布必需
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          # 发布构建里禁用缓存，避免拿到旧的依赖树
+          package-manager-cache: false
+
+      - run: npm test
+
+      - run: npm publish
