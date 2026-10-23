@@ -26,6 +26,30 @@ jobs:
       # 插件本体零依赖；测试只跑纯逻辑，不需要 npm install
       - run: npm test
 
-      # 发布内容回归：files 字段改动导致漏文件时这里会看得出来
+      # 发布内容回归：files 是白名单，被改坏（或将来加 .npmignore）都可能把
+      # test/ docs/ .github/ 带进包里。这一步不是打印，是断言。
       - name: Check package contents
-        run: npm pack --dry-run
+        shell: bash
+        run: |
+          npm pack --dry-run --json > pack-check.json 2>/dev/null
+          node -e '
+          const [manifest] = require("./pack-check.json");
+          const paths = manifest.files.map((f) => f.path);
+
+          const leaked = paths.filter((p) => /^(test|docs|\.github|\.workbuddy)\//.test(p));
+          if (leaked.length > 0) {
+            console.error("这些文件不该进包：" + leaked.join(", "));
+            process.exit(1);
+          }
+
+          // 插件入口必须真的在包里，否则装上是个空壳
+          for (const required of ["index.es", "package.json", "i18n/zh-CN.json"]) {
+            if (!paths.includes(required)) {
+              console.error("包里缺少 " + required);
+              process.exit(1);
+            }
+          }
+
+          console.log(paths.length + " 个文件，" + (manifest.size / 1024).toFixed(1) + " kB");
+          '
+          rm -f pack-check.json
