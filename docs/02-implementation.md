@@ -259,12 +259,12 @@ C 方案不自己采集，但可以「借」现成的历史数据：
 
 ### 5.2 持久化
 
-- 路径：`APPDATA_PATH/plugin-data/poi-plugin-drop-expect/state.json`（poi 的插件数据约定，与其他插件一致）。早期版本曾写过 `APPDATA_PATH/drop-expect/`，新位置为空时会读一次旧文件并在启动时立即搬到新位置，旧文件保留不删。
+- 路径：`APPDATA_PATH/plugin-data/poi-plugin-drop-expect/state.json`（poi 的插件数据约定，与其他插件一致）。开发期曾写在 `APPDATA_PATH/drop-expect/`，该位置已废弃、不再读取，目录可安全删除。
 - 白名单：`$dataVersion` / `targets` / `points` / `have` / `ui`。`ready` 不落盘。
 - 写入：临时文件 + `rename`；变化后 500ms debounce；`pluginWillUnload` 立即 flush。
 - 读取：`pluginDidLoad` 内**同步**读取并 dispatch，之后再挂 observer（避免「恢复覆盖用户操作」的竞态）。
 - 坏文件：先 `rename` 为 `state.json.bak[.n]`，再以空状态启动。
-- 迁移：`$dataVersion` 不匹配时走 `migrate(old)`；未知版本 → 退避 + 空状态，不阻塞启动。
+- 版本：`$dataVersion` 与 `DATA_VERSION`（当前 `1.0.0`）不符时按坏文件处理——同样退避成 `.bak` + 空状态。当前不实现跨版本迁移。
 
 ---
 
@@ -289,7 +289,7 @@ poi-plugin-drop-expect/
 │   ├── targets.es
 │   └── rates.es
 ├── store/
-│   ├── p-state.es        load/save/migrate
+│   ├── p-state.es        load/save/ensure
 │   ├── schema.es         sanitize（字段级校验）
 │   └── observer.es       debounce 写盘
 ├── views/
@@ -445,7 +445,7 @@ pointKeyOf({mapId,cell,level})      // '2-2|B|0'  用于去重/禁用已配点�
 |---|---|---|
 | 纯逻辑 | 概率三口径、边界、DP 与闭式一致、成本与反算 | `node --test`，无依赖 |
 | 解析 | `buildKey` 各种组合；`matchShips` 含改名/未收录/`(无)` 排除；错误分类 | 固定 JSON 夹具（从实测响应裁剪） |
-| 持久化 | 白名单、版本迁移、坏文件退避、debounce | 临时目录 + 假时钟 |
+| 持久化 | 白名单、版本不符退避、坏文件退避、debounce | 临时目录 + 假时钟 |
 | 手工回归 | 深浅主题、断网、空状态、Σp>1、目标 >12 | 每次发布前清单 |
 
 **回归红线**：任何改动后 `singleN(0.03,0.9)===76`、`allN([0.03,0.02],0.9)===126`、`allP([0.03,0.02],50)≈0.494710` 必须成立。

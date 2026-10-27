@@ -2,15 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 
-import {
-  ensurePState,
-  getLegacyPStateFilePath,
-  getPStateFilePath,
-  loadPState,
-  savePState,
-} from '../store/p-state.es'
+import { ensurePState, getPStateFilePath, loadPState, savePState } from '../store/p-state.es'
 
 const withTempDir = fn => {
   const dir = mkdtempSync(join(tmpdir(), 'drop-expect-'))
@@ -124,22 +118,25 @@ test('写盘前会剔除非法条目', () => {
   })
 })
 
-test('旧位置（<appData>/drop-expect）的存档会被读取并迁移到 plugin-data', () => {
+test('开发期的 <appData>/drop-expect 位置已废弃，不再被读取', () => {
   withTempDir(dir => {
-    // 模拟早期版本写在旧路径
-    const legacy = getLegacyPStateFilePath(dir)
-    mkdirSync(dirname(legacy), { recursive: true })
+    // 模拟开发过程中留在旧路径的存档
+    const legacy = join(dir, 'drop-expect', 'state.json')
+    mkdirSync(join(dir, 'drop-expect'), { recursive: true })
     writeFileSync(legacy, JSON.stringify({ $dataVersion: '1.0.0', ...sample }), 'utf8')
 
     const loaded = loadPState(dir)
-    assert.equal(loaded.points.length, 1, '旧存档应当被读出来')
+    assert.deepEqual(loaded.points, [], '旧位置的存档不该被捡回来')
+    assert.deepEqual(loaded.targets, [])
+  })
+})
 
-    // 运行时会调用 ensurePState 把内容立刻落到新位置
-    assert.equal(ensurePState(loaded, dir), true)
-    assert.ok(existsSync(getPStateFilePath(dir)), '保存后应落到新位置')
-    assert.ok(existsSync(legacy), '旧文件不删除，留给用户自行清理')
+test('首次运行会立刻落地新存档，已存在则不重复写', () => {
+  withTempDir(dir => {
+    const restored = loadPState(dir)
+    assert.equal(ensurePState(restored, dir), true)
+    assert.ok(existsSync(getPStateFilePath(dir)), '首次运行应生成文件')
 
-    // 新位置已存在时不再重复写
-    assert.equal(ensurePState(loaded, dir), false)
+    assert.equal(ensurePState(restored, dir), false)
   })
 })

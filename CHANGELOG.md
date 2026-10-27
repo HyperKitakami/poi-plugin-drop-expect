@@ -8,6 +8,10 @@
 
 - 加权排序的默认权重里，桶由 200 调整为 100
 
+### 移除
+
+- 不再读取开发期遗留的 `%APPDATA%\poi\drop-expect\state.json`。存档路径只剩 `plugin-data/poi-plugin-drop-expect/state.json` 一处，该旧目录可自行删除
+
 ## [0.1.0] - 2026-10-23
 
 首个公开版本。

@@ -30,7 +30,7 @@ export function pluginDidLoad() {
   }
   store.dispatch(pStateReady(restored))
   subscribePState()
-  // 旧位置迁移 / 首次运行：把当前状态立刻落到 plugin-data 下
+  // 首次运行：把当前状态立刻落到 plugin-data 下
   ensurePState(restored)
 }
 

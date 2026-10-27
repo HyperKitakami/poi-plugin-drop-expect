@@ -7,8 +7,8 @@
   写入先落 .tmp 再 rename，避免写到一半留下半截 JSON。
   读不出来时把原文件改名成 .bak，绝不静默覆盖用户数据。
 
-  早期版本曾写在 APPDATA_PATH/drop-expect/；新路径没有存档时会读一次旧位置，
-  之后由 observer 写到新位置，等于自动迁移。旧文件不删。
+  开发期曾写在 APPDATA_PATH/drop-expect/，该位置已废弃且不再读取；
+  0.1.0 起落盘路径只有 plugin-data 一处。
 */
 
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
@@ -19,8 +19,6 @@ import { DATA_VERSION, sanitizePState, toPState } from './schema'
 
 const DATA_DIR = 'plugin-data'
 const FILE_NAME = 'state.json'
-// 旧的落盘目录（不含 plugin-data），只用于读取迁移
-const LEGACY_DIR = 'drop-expect'
 
 export const emptyPState = () => sanitizePState(null)
 
@@ -44,9 +42,6 @@ export const resolveAppDataPath = appDataPath => {
 
 export const getPStateFilePath = appDataPath =>
   join(resolveAppDataPath(appDataPath), DATA_DIR, PACKAGE_NAME, FILE_NAME)
-
-export const getLegacyPStateFilePath = appDataPath =>
-  join(resolveAppDataPath(appDataPath), LEGACY_DIR, FILE_NAME)
 
 const backupUnreadable = path => {
   let backupPath = `${path}.bak`
@@ -76,33 +71,20 @@ const tryRead = path => {
 export const loadPState = appDataPath => {
   const path = getPStateFilePath(appDataPath)
 
-  if (existsSync(path)) {
-    const loaded = tryRead(path)
-    if (loaded) {
-      return loaded
-    }
-    try {
-      backupUnreadable(path)
-    } catch (backupErr) {
-      console.error('[drop-expect] 退避失败', backupErr)
-    }
+  if (!existsSync(path)) {
     return emptyPState()
   }
 
-  // 旧位置迁移：读到就用，后续保存会落到新位置
-  try {
-    const legacy = getLegacyPStateFilePath(appDataPath)
-    if (existsSync(legacy)) {
-      const loaded = tryRead(legacy)
-      if (loaded) {
-        console.log('[drop-expect] 已读取旧位置存档，下次保存写入 plugin-data')
-        return loaded
-      }
-    }
-  } catch (err) {
-    console.error('[drop-expect] 读取旧存档失败', err)
+  const loaded = tryRead(path)
+  if (loaded) {
+    return loaded
   }
 
+  try {
+    backupUnreadable(path)
+  } catch (backupErr) {
+    console.error('[drop-expect] 退避失败', backupErr)
+  }
   return emptyPState()
 }
 
@@ -122,7 +104,7 @@ export const savePState = (state, appDataPath) => {
 
 /**
  * 新位置还没有存档时，把当前状态写一份。
- * 用于旧位置迁移后立刻落地——否则要等用户下次改动才会真正搬过去。
+ * 首次运行时立刻落地，否则要等用户下次改动才会真正生成文件。
  */
 export const ensurePState = (state, appDataPath) => {
   try {
