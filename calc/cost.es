@@ -96,11 +96,11 @@ export const afford = (have, need) => {
 /*
   加权消耗：把五项折成一个可比的价格。
 
-  默认权重按「稀缺程度」给：油 1、弹 0.5、钢 0.3、铝 10、桶 200。
+  默认权重按「稀缺程度」给：油 1、弹 0.5、钢 0.3、铝 10、桶 100。
   铝和桶远高于油弹钢，是因为远征产出慢、且桶还要额外补给；
   钢给 0.3 是因为它最容易堆积。数值只是默认值，界面上可以改。
 */
-export const DEFAULT_WEIGHTS = { fuel: 1, ammo: 0.5, steel: 0.3, bauxite: 10, bucket: 200 }
+export const DEFAULT_WEIGHTS = { fuel: 1, ammo: 0.5, steel: 0.3, bauxite: 10, bucket: 100 }
 
 const weightOf = v => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null)
 

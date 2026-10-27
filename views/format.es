@@ -71,7 +71,7 @@ export const costLine = (cost, { zeroDash = false } = {}) => {
 }
 
 /**
- 加权消耗：五项折成一个数，量级可能很小（权重 0.3）也可能很大（桶 200）。
+ 加权消耗：五项折成一个数，量级可能很小（权重 0.3）也可能很大（桶 100）。
  只在加权排序时显示，所以按「大到万、小到一位小数」处理即可。
 */
 export const fmtWeighted = value => {

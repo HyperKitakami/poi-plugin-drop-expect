@@ -100,21 +100,21 @@ test('空消耗判定', () => {
 })
 
 test('权重：缺省按键补齐，非法值回落，0 是合法权重', () => {
-  assert.deepEqual(DEFAULT_WEIGHTS, { fuel: 1, ammo: 0.5, steel: 0.3, bauxite: 10, bucket: 200 })
+  assert.deepEqual(DEFAULT_WEIGHTS, { fuel: 1, ammo: 0.5, steel: 0.3, bauxite: 10, bucket: 100 })
   assert.deepEqual(normalizeWeights(null), DEFAULT_WEIGHTS)
   assert.deepEqual(normalizeWeights({ fuel: 2, ammo: -1, steel: 0 }), {
     fuel: 2,
     ammo: 0.5,
     steel: 0,
     bauxite: 10,
-    bucket: 200,
+    bucket: 100,
   })
 })
 
 test('加权消耗：按默认权重折算', () => {
   const total = { fuel: 100, ammo: 100, steel: 100, bauxite: 100, bucket: 1 }
-  // 100*1 + 100*0.5 + 100*0.3 + 100*10 + 1*200
-  assert.equal(weightedTotal(total, DEFAULT_WEIGHTS), 1380)
+  // 100*1 + 100*0.5 + 100*0.3 + 100*10 + 1*100
+  assert.equal(weightedTotal(total, DEFAULT_WEIGHTS), 1280)
   // 权重改成只看铝
   assert.equal(weightedTotal(total, { fuel: 0, ammo: 0, steel: 0, bauxite: 1, bucket: 0 }), 100)
   assert.equal(weightedTotal(null, DEFAULT_WEIGHTS), null)
